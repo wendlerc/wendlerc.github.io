@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastSpecialStarTime = 0;
     
     // Sound effects
-    let soundEnabled = true;
+    let soundEnabled = false;
     let sounds = {};
     
     // Create stars
