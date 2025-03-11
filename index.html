@@ -1,7 +1,5 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="x-ua-compatible" content="ie=edge" />
@@ -10,16 +8,17 @@
     <!-- Define title -->
     <title>Chris Wendler</title>
 
-    <!-- Include favicon. Use, e.g., https://favicon.io/ -->
+    <!-- Include favicon -->
     <link rel="icon" type="image/png" href="favicon.png" sizes="32x32" />
 
     <!-- Include style sheets -->
-    <link rel="stylesheet" href="main.css" />
+    <link rel="stylesheet" href="styles.css" />
 
     <!-- Fonts from Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 
     <!-- Load FontAwesome (for icons) -->
     <link
@@ -39,6 +38,10 @@
   </head>
 
   <body>
+    <!-- Star animation canvas -->
+    <canvas id="starfield"></canvas>
+    
+    <!-- Personal content -->
     <section id="content">
       <!-- Avatar image -->
       <img src="image.png" alt="Chris Wendler" class="avatar" />
@@ -46,7 +49,7 @@
       <!-- Text -->
       <h1>Hi, I'm Chris Wendler!</h1>
       <p>
-        I am a postdoc in the <a href="https://baulab.info">interpretable neural networks lab</a> at Northeastern University. 
+        I am a postdoc in the <a href="https://baulab.info" target="_blank" rel="noopener noreferrer">interpretable neural networks lab</a> at Northeastern University. 
       </p>
       <p>
         My research focus is on deep learning and mechanistic interpretability.
@@ -57,26 +60,50 @@
 
       <!-- Icons -->
       <ul class="icons">
-        <!--<li>
-          <a href="" title="Institutional website"><i class="fas fa-university"></i></a>
-        </li>-->
         <li>
           <a href="mailto:chris dot wendler at epfl dot ch" title="E-Mail"><i class="fas fa-envelope"></i></a>
         </li>
         <li>
-          <a href="https://github.com/wendlerc" title="GitHub"><i class="fab fa-github"></i></a>
+          <a href="https://github.com/wendlerc" target="_blank" rel="noopener noreferrer" title="GitHub"><i class="fab fa-github"></i></a>
         </li>
         <li>
-          <a href="https://www.linkedin.com/in/wendlerc" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+          <a href="https://www.linkedin.com/in/wendlerc" target="_blank" rel="noopener noreferrer" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
         </li>
-        <!--<li>
-          <a href="" title="NASA / ADS"><i class="ai ai-ads"></i></a>
-        </li>-->
         <li>
-          <a href="https://scholar.google.com/citations?user=5CPQWo8AAAAJ&hl=de" title="Google Scholar"><i class="ai ai-google-scholar"></i></a>
+          <a href="https://scholar.google.com/citations?user=5CPQWo8AAAAJ&hl=de" target="_blank" rel="noopener noreferrer" title="Google Scholar"><i class="ai ai-google-scholar"></i></a>
         </li>
       </ul>
     </section>
+    
+    <!-- Credits -->
+    <div class="credits">
+      Background: <a href="https://vizhub.com/curran/cosmic-voyage?file=index.html&edit=files" target="_blank" rel="noopener noreferrer">Cosmic Voyage</a> by Curran Kelleher
+    </div>
+
+    <!-- Star animation scripts -->
+    <script src="js/Star.js"></script>
+    <script src="js/Comet.js"></script>
+    <script src="js/Nebula.js"></script>
+    <script src="js/StarColors.js"></script>
+    <script src="js/main.js"></script>
+    
+    <!-- Script to handle cursor visibility on links -->
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        // Get all links
+        const links = document.querySelectorAll('a');
+        
+        // Add event listeners to show cursor on links
+        links.forEach(link => {
+          link.addEventListener('mouseenter', () => {
+            document.querySelector('.spaceship-cursor').style.opacity = '0.3';
+          });
+          
+          link.addEventListener('mouseleave', () => {
+            document.querySelector('.spaceship-cursor').style.opacity = '1';
+          });
+        });
+      });
+    </script>
   </body>
- 
-</html>
+</html> 
