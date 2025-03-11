@@ -10,6 +10,12 @@ class Star {
       // Add velocity properties for deflection
       this.vx = 0;
       this.vy = 0;
+      // Add chase mode property
+      this.chaseMode = false;
+      // Maximum velocity
+      this.maxVelocity = 5;
+      // Track last hit time to prevent multiple hits when stationary
+      this.lastHitTime = 0;
     }
   
     reset() {
@@ -19,13 +25,14 @@ class Star {
       this.origZ = this.z;
       this.size = Math.random() * 2 + 0.5;
       
-      // 10% chance of being a brighter star
-      if (Math.random() < 0.1) {
+      // Increase chance of larger stars to make the game more playable
+      // 20% chance of being a brighter star (up from 10%)
+      if (Math.random() < 0.2) {
         this.size *= 2;
       }
       
-      // 1% chance of being a much brighter star
-      if (Math.random() < 0.01) {
+      // 5% chance of being a much brighter star (up from 1%)
+      if (Math.random() < 0.05) {
         this.size *= 3;
       }
       
@@ -34,6 +41,9 @@ class Star {
       // Reset velocity when star is reset
       this.vx = 0;
       this.vy = 0;
+      
+      // Reset hit time when star is reset
+      this.lastHitTime = 0;
     }
   
     update(speed) {
@@ -46,9 +56,23 @@ class Star {
       this.x += this.vx;
       this.y += this.vy;
       
+      // Limit maximum velocity to prevent stars from moving too fast
+      const currentVelocity = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+      if (currentVelocity > this.maxVelocity) {
+        const scale = this.maxVelocity / currentVelocity;
+        this.vx *= scale;
+        this.vy *= scale;
+      }
+      
       // Gradually reduce velocity (friction)
-      this.vx *= 0.95;
-      this.vy *= 0.95;
+      // Apply even less friction to chasing stars to make them more persistent
+      if (this.chaseMode) {
+        this.vx *= 0.995;
+        this.vy *= 0.995;
+      } else {
+        this.vx *= 0.95;
+        this.vy *= 0.95;
+      }
   
       // Calculate screen position with perspective
       this.screenX = (this.x / this.z) * 1000 + this.canvas.width / 2;
@@ -62,18 +86,20 @@ class Star {
       this.twinklePhase += this.pulseSpeed;
       this.pulseFactor = (Math.sin(this.twinklePhase) + 1) * 0.5 * this.pulse;
   
-      // Check if star is outside the screen
+      // Check if star is outside the screen with a larger margin
+      // This prevents stars from disappearing too quickly when chasing
+      const margin = 100;
       if (
-        this.screenX < -50 ||
-        this.screenX > this.canvas.width + 50 ||
-        this.screenY < -50 ||
-        this.screenY > this.canvas.height + 50
+        this.screenX < -margin ||
+        this.screenX > this.canvas.width + margin ||
+        this.screenY < -margin ||
+        this.screenY > this.canvas.height + margin
       ) {
         this.reset();
       }
     }
   
-    draw(ctx) {
+    draw(ctx, isGameOver = false) {
       const distanceFactor = 1 - this.z / 2000;
       const opacity = Math.min(distanceFactor * 1.5, 1);
       
@@ -91,9 +117,12 @@ class Star {
       
       const { r, g, b } = this.baseColor;
       
-      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${opacity})`);
-      gradient.addColorStop(0.1, `rgba(${r}, ${g}, ${b}, ${opacity * 0.8})`);
-      gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${opacity * 0.2})`);
+      // Make chasing stars more visible with a brighter glow
+      const intensityFactor = this.chaseMode ? 1.3 : 1.0;
+      
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${opacity * intensityFactor})`);
+      gradient.addColorStop(0.1, `rgba(${r}, ${g}, ${b}, ${opacity * 0.8 * intensityFactor})`);
+      gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${opacity * 0.2 * intensityFactor})`);
       gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
       
       // Draw glow
@@ -103,17 +132,27 @@ class Star {
       ctx.fill();
       
       // Draw main star
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${opacity * intensityFactor})`;
       ctx.beginPath();
       ctx.arc(this.screenX, this.screenY, finalSize, 0, Math.PI * 2);
       ctx.fill();
       
       // Add highlight in the center for brighter stars
       if (finalSize > 1.5) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.8})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.8 * intensityFactor})`;
         ctx.beginPath();
         ctx.arc(this.screenX, this.screenY, finalSize * 0.5, 0, Math.PI * 2);
         ctx.fill();
+      }
+      
+      // Draw red circle around stars that are large enough to register hits
+      // Only draw if not in game over state
+      if (this.displaySize > 10.0 && !isGameOver) {
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(this.screenX, this.screenY, finalSize + 2, 0, Math.PI * 2);
+        ctx.stroke();
       }
     }
   }

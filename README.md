@@ -73,30 +73,53 @@ This template is released under a BSD 3-Clause License, see [LICENSE](https://gi
 
 The [default favicon](https://github.com/timothygebhard/minimal-academic-website/blob/main/favicon.png) is taken from [Twemoji](https://twemoji.twitter.com/), who licensed it licensed under the [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) license.
 
+# Chris Wendler's Interactive Space Website (from here things are written by Claude3.7)
 
-# Chris Wendler's Personal Website with Starry Background
-
-This is a personal website for Chris Wendler featuring an interactive starry background animation.
+This is an interactive space-themed personal website for Chris Wendler featuring a game-like star animation with multiple phases and special effects.
 
 ## Features
 
 - Interactive star field animation with parallax effect
+- Spaceship cursor that interacts with stars and leaves a particle trail
+- Game-like progression with multiple phases:
+  - Phase 1: Normal mode - stars move away from the spaceship
+  - Phase 2: Blue chase mode (after 42 hits) - blue stars begin to chase the spaceship
+  - Phase 3: Red chase mode (after 84 hits) - red stars chase more aggressively
+  - Phase 4: Rainbow chase mode (after 126 hits) - colorful stars chase at maximum intensity
+  - Phase 5: Explosion (after 168 hits) - spaceship explodes and game ends
+- Special power-ups that appear randomly:
+  - Shield power-up (gold star) - provides temporary invincibility
+  - Reduce power-up (green star) - reduces hit count by 5
+- Visual effects:
+  - Particle trail behind the spaceship
+  - Shockwave effects on collisions
+  - Shield visual effect when active
+- Sound effects for collisions, power-ups, and phase transitions (can be toggled)
+- Gradually increasing star density and speed through game phases
+- Hit counter display
+- Aggressive chasing behavior with stars actively pursuing the spaceship
 - Responsive design that works on all devices
-- Clean, modern interface with a space theme
-- Personal information and contact links
 
-## How to Use
+## How to Play
 
-Simply open `index.html` in a web browser to view the website.
+1. Move your mouse around to navigate the spaceship
+2. Collide with the larger stars (marked with red circles) to increase your hit counter
+3. Collect special power-up stars for temporary advantages:
+   - Gold stars: Temporary invincibility
+   - Green stars: Reduce your hit count by 5
+4. Reach 42 hits to activate blue chase mode
+5. Reach 84 hits to activate red chase mode
+6. Reach 126 hits to activate rainbow mode
+7. Reach 168 hits to trigger the explosion finale
 
-## Interaction
+## Controls
 
-- Move your mouse around to create a parallax effect with the stars
-- Occasional comets will streak across the screen
+- Mouse movement: Control the spaceship
+- Sound button (bottom right): Toggle sound effects on/off
 
 ## Credits
 
-This project combines a personal website with a star field animation.
+This project is based on the [Cosmic Voyage](https://vizhub.com/curran/cosmic-voyage?file=index.html&edit=files) star animation by Curran Kelleher, with significant modifications and game elements added.
 
 ## License
 
