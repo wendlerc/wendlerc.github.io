@@ -35,37 +35,18 @@
       integrity="sha512-KlJCpRsLf+KKu2VQa5vmRuClRFjxc5lXO03ixZt82HZUk41+1I0bD8KBSA0fY290ayMfWYI9udIqeOWSu1/uZg=="
       crossorigin="anonymous"
     />
-    
-    <style>
-      /* Hit counter styles */
-      #hit-counter {
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: rgba(0, 0, 0, 0.6);
-        color: #4db8ff;
-        padding: 5px 10px;
-        border-radius: 5px;
-        font-family: 'Orbitron', sans-serif;
-        font-size: 14px;
-        z-index: 100;
-        box-shadow: 0 0 10px rgba(100, 200, 255, 0.3);
-      }
-      
-      /* Game milestones */
-      .milestone {
-        color: #ff9900;
-        font-weight: bold;
-      }
-    </style>
   </head>
 
   <body>
     <!-- Star animation canvas -->
     <canvas id="starfield"></canvas>
     
-    <!-- Hit counter -->
-    <div id="hit-counter">Hits: <span id="hits">0</span></div>
+    <!-- Game stats -->
+    <div id="game-stats">
+      <div id="hit-counter">Hits: <span id="hits">0</span></div>
+      <div id="timer">Time: <span id="time">00:00</span></div>
+      <div id="final-time" style="display: none;">Final Time: <span id="final-time-value">00:00</span></div>
+    </div>
     
     <!-- Personal content -->
     <section id="content">
@@ -119,6 +100,8 @@
         // Get all links
         const links = document.querySelectorAll('a');
         const hitCounterElement = document.getElementById('hits');
+        const timeElement = document.getElementById('time');
+        const finalTimeElement = document.getElementById('final-time');
         
         // Add event listeners to show cursor on links
         links.forEach(link => {
@@ -133,7 +116,7 @@
           });
         });
         
-        // Update hit counter - always show progress toward final goal
+        // Update hit counter and timer - always show progress toward final goal
         setInterval(() => {
           if (window.hitCounter !== undefined) {
             // Always show progress toward 168 (final goal)
@@ -142,6 +125,14 @@
             // Add additional milestone indicators
             if (window.hitCounter >= 168) {
               hitCounterElement.innerHTML = `<span class="milestone">${window.hitCounter}</span> GAME OVER`;
+              
+              // Show final time if available
+              if (window.finalTime !== undefined) {
+                const minutes = Math.floor(window.finalTime / 60).toString().padStart(2, '0');
+                const seconds = (window.finalTime % 60).toString().padStart(2, '0');
+                finalTimeElement.style.display = 'block';
+                document.getElementById('final-time-value').textContent = `${minutes}:${seconds}`;
+              }
             }
           }
         }, 100);

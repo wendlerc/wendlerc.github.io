@@ -24,6 +24,47 @@ document.addEventListener('DOMContentLoaded', () => {
     let explosionTime = 0;
     let explosionParticles = [];
     
+    // Timer variables
+    let gameStartTime = Date.now();
+    let gameTime = 0;
+    let finalTime = 0;
+    let timerInterval = null;
+    
+    // Start the timer
+    function startTimer() {
+      gameStartTime = Date.now();
+      timerInterval = setInterval(updateTimer, 1000);
+      updateTimer(); // Update immediately
+    }
+    
+    // Update the timer display
+    function updateTimer() {
+      if (gamePhase < 4) { // Only update if game is not over
+        gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+        const minutes = Math.floor(gameTime / 60).toString().padStart(2, '0');
+        const seconds = (gameTime % 60).toString().padStart(2, '0');
+        document.getElementById('time').textContent = `${minutes}:${seconds}`;
+        // Expose game time to window object for the UI
+        window.gameTime = gameTime;
+      }
+    }
+    
+    // Stop the timer and show final time
+    function stopTimer() {
+      clearInterval(timerInterval);
+      finalTime = gameTime;
+      // Expose final time to window object for the UI
+      window.finalTime = finalTime;
+      
+      // Format final time
+      const minutes = Math.floor(finalTime / 60).toString().padStart(2, '0');
+      const seconds = (finalTime % 60).toString().padStart(2, '0');
+      
+      // Update final time display
+      document.getElementById('final-time-value').textContent = `${minutes}:${seconds}`;
+      document.getElementById('final-time').style.display = 'block';
+    }
+    
     // State with default values - start with lower values
     let stars = [];
     let comets = [];
@@ -284,8 +325,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Keep chase mode active - don't reset it
       });
       
-      // Show game over notification
-      showGameOverNotification("GAME OVER");
+      // Stop the timer and show final time
+      stopTimer();
+      
+      // Show game over notification with final time
+      const minutes = Math.floor(finalTime / 60).toString().padStart(2, '0');
+      const seconds = (finalTime % 60).toString().padStart(2, '0');
+      showGameOverNotification(`GAME OVER - TIME: ${minutes}:${seconds}`);
     }
     
     // Create a trail particle
@@ -346,8 +392,8 @@ document.addEventListener('DOMContentLoaded', () => {
         y: Math.random() * canvas.height,
         size: 15,
         pulse: 0,
-        // Only shield and reduce power-ups (removed clear/blue power-up)
-        type: Math.random() < 0.5 ? 'shield' : 'reduce',
+        // Add back the blue power-up with 1/3 probability for each type
+        type: Math.random() < 0.33 ? 'shield' : (Math.random() < 0.5 ? 'reduce' : 'clear'),
         active: true
       };
       
@@ -394,6 +440,11 @@ document.addEventListener('DOMContentLoaded', () => {
           gradient.addColorStop(0, 'rgba(50, 205, 50, 0.8)');
           gradient.addColorStop(0.5, 'rgba(50, 205, 50, 0.4)');
           gradient.addColorStop(1, 'rgba(50, 205, 50, 0)');
+        } else if (star.type === 'clear') {
+          // Blue clear stars star
+          gradient.addColorStop(0, 'rgba(0, 0, 255, 0.8)');
+          gradient.addColorStop(0.5, 'rgba(0, 0, 255, 0.4)');
+          gradient.addColorStop(1, 'rgba(0, 0, 255, 0)');
         }
         
         ctx.fillStyle = gradient;
@@ -402,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fill();
         
         // Draw star shape
-        ctx.fillStyle = star.type === 'shield' ? '#FFD700' : '#32CD32';
+        ctx.fillStyle = star.type === 'shield' ? '#FFD700' : (star.type === 'reduce' ? '#32CD32' : '#0000FF');
         ctx.beginPath();
         
         // Draw a star shape
@@ -443,11 +494,14 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if (star.type === 'reduce') {
             // Reduce hits effect - decrease hit counter by 5
             reduceHits();
+          } else if (star.type === 'clear') {
+            // Clear stars effect - remove all stars
+            clearStars();
           }
           
           // Create a shockwave effect
           createShockwave(star.x, star.y, 
-            star.type === 'shield' ? 'rgba(255, 215, 0, 0.8)' : 'rgba(50, 205, 50, 0.8)');
+            star.type === 'shield' ? 'rgba(255, 215, 0, 0.8)' : (star.type === 'reduce' ? 'rgba(50, 205, 50, 0.8)' : 'rgba(0, 0, 255, 0.8)'));
         }
       }
     }
@@ -506,6 +560,53 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 2000);
     }
     
+    // Clear stars power-up effect
+    function clearStars() {
+      // Play a sound for clearing stars
+      sounds.phaseChange();
+      
+      // Store the current star count
+      const currentStarCount = stars.length;
+      
+      // Clear all stars
+      stars = [];
+      
+      // Show clear notification
+      const notification = document.createElement('div');
+      notification.className = 'game-notification';
+      notification.textContent = 'STARS CLEARED!';
+      notification.style.color = '#0088FF';
+      document.body.appendChild(notification);
+      
+      // Fade out and remove
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => {
+          notification.remove();
+        }, 1000);
+      }, 2000);
+      
+      // Gradually bring stars back after 3 seconds
+      setTimeout(() => {
+        // Recreate stars with the same count
+        stars = Array(currentStarCount).fill().map(() => new Star(canvas, { colorMode }));
+        
+        // Restore chase mode for appropriate game phase
+        if (gamePhase >= 1) {
+          const chasePercentage = gamePhase === 1 ? 0.4 : (gamePhase === 2 ? 0.6 : 0.8);
+          stars.forEach(s => {
+            if (gamePhase >= 2) {
+              s.colorMode = colorMode;
+              s.baseColor = starColors.getColor(colorMode);
+            }
+            if (Math.random() < chasePercentage) {
+              s.chaseMode = true;
+            }
+          });
+        }
+      }, 3000);
+    }
+    
     // Draw shield effect
     function drawShield() {
       if (shieldActive) {
@@ -539,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
     createStars();
     createComets();
     loadSounds();
+    startTimer(); // Start the timer when the game initializes
     
     // Update spaceship cursor position
     document.addEventListener('mousemove', (e) => {
