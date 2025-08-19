@@ -69,41 +69,11 @@
             font-size: 1.2em;
         }
         
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-        
-        .no-files {
-            text-align: center;
-            padding: 40px;
-            color: #888;
-            background: #f8f9fa;
-            border-radius: 6px;
-            border: 2px dashed #ddd;
-        }
-        
         .file-count {
             text-align: center;
             margin-bottom: 20px;
             color: #666;
             font-style: italic;
-        }
-
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -111,14 +81,9 @@
     <div class="container">
         <h1>Short notes</h1>
         
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <p style="margin-top: 15px;">Scanning directory for HTML files...</p>
-        </div>
+        <div id="file-count" class="file-count"></div>
         
-        <div id="file-count" class="file-count" style="display: none;"></div>
-        
-        <ul id="file-list" class="file-list" style="display: none;"></ul>
+        <ul id="file-list" class="file-list"></ul>
         
         <div id="no-files" class="no-files" style="display: none;">
             <p>📭 No HTML files found</p>
@@ -127,73 +92,31 @@
     </div>
 
     <script>
-        // Extended list of common HTML filenames to check
-        const possibleFiles = [
-            confidence_regulation.html,
-            dla.html,
-            mup.html,
-            rlhf.html,
-            rope.html,
-            steering.html
+        // List of HTML files to display
+        const fileList = [
+            'confidence_regulation.html',
+            'dla.html',
+            'mup.html',
+            'rlhf.html',
+            'rope.html',
+            'steering.html'
         ];
 
-        async function checkFileExists(filename) {
-            try {
-                const response = await fetch(filename, { 
-                    method: 'HEAD',
-                    cache: 'no-cache'
-                });
-                return response.ok;
-            } catch (error) {
-                return false;
-            }
-        }
-
-        async function findHtmlFiles() {
-            const loadingEl = document.getElementById('loading');
+        function displayFiles() {
             const fileListEl = document.getElementById('file-list');
             const noFilesEl = document.getElementById('no-files');
             const fileCountEl = document.getElementById('file-count');
             
-            const existingFiles = [];
-            const currentFile = window.location.pathname.split('/').pop() || 'index.html';
-            
-            // Check files in batches to avoid overwhelming the browser
-            const batchSize = 10;
-            for (let i = 0; i < possibleFiles.length; i += batchSize) {
-                const batch = possibleFiles.slice(i, i + batchSize);
-                const batchPromises = batch.map(async (filename) => {
-                    if (filename === currentFile) return null; // Skip current file
-                    const exists = await checkFileExists(filename);
-                    return exists ? filename : null;
-                });
-                
-                const batchResults = await Promise.all(batchPromises);
-                existingFiles.push(...batchResults.filter(file => file !== null));
-                
-                // Small delay to prevent overwhelming the server
-                if (i + batchSize < possibleFiles.length) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-            }
-            
-            // Hide loading
-            loadingEl.style.display = 'none';
-            
-            if (existingFiles.length === 0) {
+            if (fileList.length === 0) {
                 noFilesEl.style.display = 'block';
                 return;
             }
             
-            // Sort files alphabetically
-            existingFiles.sort();
-            
             // Show file count
-            fileCountEl.textContent = `Found ${existingFiles.length} HTML file${existingFiles.length === 1 ? '' : 's'}`;
-            fileCountEl.style.display = 'block';
+            fileCountEl.textContent = `Found ${fileList.length} HTML file${fileList.length === 1 ? '' : 's'}`;
             
             // Create list items
-            const listItems = existingFiles.map(filename => `
+            const listItems = fileList.map(filename => `
                 <li class="file-item">
                     <a href="${filename}" class="file-link">
                         <span class="file-icon">🌐</span>
@@ -203,11 +126,10 @@
             `).join('');
             
             fileListEl.innerHTML = listItems;
-            fileListEl.style.display = 'block';
         }
         
-        // Start scanning when page loads
-        document.addEventListener('DOMContentLoaded', findHtmlFiles);
+        // Display files when page loads
+        document.addEventListener('DOMContentLoaded', displayFiles);
     </script>
 </body>
 </html>
