@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Files Directory</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 15px;
+        }
+        
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .file-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            margin: 10px 0;
+            padding: 15px;
+            transition: all 0.2s ease;
+        }
+        
+        .file-item:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .file-link {
+            text-decoration: none;
+            color: #3498db;
+            font-weight: 500;
+            font-size: 1.1em;
+            display: block;
+        }
+        
+        .file-link:hover {
+            color: #2980b9;
+        }
+        
+        .file-icon {
+            display: inline-block;
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .no-files {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 2px dashed #ddd;
+        }
+        
+        .file-count {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 HTML Files</h1>
+        
+        <div id="loading" class="loading">
+            <p>📄 Scanning for HTML files...</p>
+        </div>
+        
+        <div id="file-count" class="file-count" style="display: none;"></div>
+        
+        <ul id="file-list" class="file-list" style="display: none;"></ul>
+        
+        <div id="no-files" class="no-files" style="display: none;">
+            <p>📭 No HTML files found in this directory</p>
+            <p>Try adding some .html files to see them listed here!</p>
+        </div>
+    </div>
+
+    <script>
+        // Common HTML files that might exist
+        const commonHtmlFiles = [
+            'index.html',
+            'about.html',
+            'contact.html',
+            'home.html',
+            'main.html',
+            'page.html',
+            'test.html',
+            'demo.html',
+            'example.html',
+            'template.html',
+            'layout.html',
+            'header.html',
+            'footer.html',
+            'nav.html',
+            'sidebar.html',
+            'content.html',
+            'blog.html',
+            'portfolio.html',
+            'gallery.html',
+            'services.html',
+            'products.html',
+            'news.html',
+            'events.html',
+            'login.html',
+            'register.html',
+            'dashboard.html',
+            'profile.html',
+            'settings.html',
+            'help.html',
+            'faq.html',
+            'privacy.html',
+            'terms.html',
+            'sitemap.html',
+            '404.html',
+            'error.html'
+        ];
+
+        async function checkFileExists(filename) {
+            try {
+                const response = await fetch(filename, { method: 'HEAD' });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        async function findHtmlFiles() {
+            const loadingEl = document.getElementById('loading');
+            const fileListEl = document.getElementById('file-list');
+            const noFilesEl = document.getElementById('no-files');
+            const fileCountEl = document.getElementById('file-count');
+            
+            const existingFiles = [];
+            const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+            
+            // Check each common HTML file
+            for (const filename of commonHtmlFiles) {
+                // Skip the current file to avoid self-reference
+                if (filename === currentFile) continue;
+                
+                const exists = await checkFileExists(filename);
+                if (exists) {
+                    existingFiles.push(filename);
+                }
+            }
+            
+            // Hide loading
+            loadingEl.style.display = 'none';
+            
+            if (existingFiles.length === 0) {
+                noFilesEl.style.display = 'block';
+                return;
+            }
+            
+            // Show file count
+            fileCountEl.textContent = `Found ${existingFiles.length} HTML file${existingFiles.length === 1 ? '' : 's'}`;
+            fileCountEl.style.display = 'block';
+            
+            // Sort files alphabetically
+            existingFiles.sort();
+            
+            // Create list items
+            const listItems = existingFiles.map(filename => `
+                <li class="file-item">
+                    <a href="${filename}" class="file-link">
+                        <span class="file-icon">🌐</span>
+                        ${filename}
+                    </a>
+                </li>
+            `).join('');
+            
+            fileListEl.innerHTML = listItems;
+            fileListEl.style.display = 'block';
+        }
+        
+        // Alternative approach: Try to use GitHub Pages API if available
+        async function tryGitHubAPI() {
+            try {
+                // This will only work if this is a GitHub Pages site and the repo is public
+                const pathParts = window.location.pathname.split('/');
+                if (pathParts.length >= 3 && window.location.hostname.includes('github.io')) {
+                    const username = window.location.hostname.split('.')[0];
+                    const repo = pathParts[1];
+                    
+                    const response = await fetch(`https://api.github.com/repos/${username}/${repo}/contents${pathParts.slice(2).join('/')}`);
+                    if (response.ok) {
+                        const files = await response.json();
+                        return files.filter(file => 
+                            file.type === 'file' && 
+                            file.name.endsWith('.html') &&
+                            file.name !== (window.location.pathname.split('/').pop() || 'index.html')
+                        ).map(file => file.name);
+                    }
+                }
+            } catch (error) {
+                console.log('GitHub API not available, using fallback method');
+            }
+            return null;
+        }
+        
+        async function init() {
+            // First try GitHub API for more accurate results
+            const githubFiles = await tryGitHubAPI();
+            
+            if (githubFiles && githubFiles.length > 0) {
+                const loadingEl = document.getElementById('loading');
+                const fileListEl = document.getElementById('file-list');
+                const fileCountEl = document.getElementById('file-count');
+                
+                loadingEl.style.display = 'none';
+                
+                // Show file count
+                fileCountEl.textContent = `Found ${githubFiles.length} HTML file${githubFiles.length === 1 ? '' : 's'}`;
+                fileCountEl.style.display = 'block';
+                
+                // Sort files alphabetically
+                githubFiles.sort();
+                
+                // Create list items
+                const listItems = githubFiles.map(filename => `
+                    <li class="file-item">
+                        <a href="${filename}" class="file-link">
+                            <span class="file-icon">🌐</span>
+                            ${filename}
+                        </a>
+                    </li>
+                `).join('');
+                
+                fileListEl.innerHTML = listItems;
+                fileListEl.style.display = 'block';
+            } else {
+                // Fallback to checking common files
+                await findHtmlFiles();
+            }
+        }
+        
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
