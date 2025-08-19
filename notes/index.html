@@ -80,9 +80,7 @@
 <body>
     <div class="container">
         <h1>Short notes</h1>
-        
-        <div id="file-count" class="file-count"></div>
-        
+                
         <ul id="file-list" class="file-list"></ul>
         
         <div id="no-files" class="no-files" style="display: none;">
@@ -105,16 +103,12 @@
         function displayFiles() {
             const fileListEl = document.getElementById('file-list');
             const noFilesEl = document.getElementById('no-files');
-            const fileCountEl = document.getElementById('file-count');
             
             if (fileList.length === 0) {
                 noFilesEl.style.display = 'block';
                 return;
             }
-            
-            // Show file count
-            fileCountEl.textContent = `Found ${fileList.length} HTML file${fileList.length === 1 ? '' : 's'}`;
-            
+                        
             // Create list items
             const listItems = fileList.map(filename => `
                 <li class="file-item">
