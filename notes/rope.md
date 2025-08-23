@@ -44,12 +44,12 @@ $$
 
 Without assumptions I don't see a straightforward way to achieve this previous token head. However, after discussing with my friend Jakob Heiss, we had the idea that we could assume that the model either has a bias term (one of the components of $$x_i \in \mathbb{R}^d$$ is a constant value) either because that bias term is hardcoded or because the previous layers have learned to create one. 
 
-Thus, w.l.o.g. let's assume that for each $$i$$ we have $$x_{i1} = 1$$. Now, this can be used to create keys and queries that solely depend on the positional information.
+Thus, w.l.o.g. let's assume that for each $$i$$ we have $$x_{i1} = 1$$ (using 1-based indexing). Now, this can be used to create keys and queries that solely depend on the positional information.
 
 Then, we could set $$W_k$$ such that, for all $$i$$, $$W_k x_{i} = (1, 0, 1, 0, \cdots, 1, 0)^T$$. That is, 
 $$
 W_{kij} := \begin{cases}
-1 && \text{if } j = 1 \text{ and } i \text{ is even,}\\
+1 && \text{if } j = 1 \text{ and } i \text{ is odd,}\\
 0 && \text{else.}
 \end{cases}
 $$
@@ -57,4 +57,18 @@ $$
 
 $$W_q$$ such that $$W_q x_{n+1}$$ matches $$R^{d}_{\Theta, -1} (1, 0, 1, 0, \cdots, 1, 0)^T = (\cos{\theta_1}, -\sin{\theta_1}, \cdots, \cos{\theta_{d/2}}, -\sin{\theta_{d/2}})$$ to maximize the dot product with $$k_{n}$$. Additionally, we can add a temperature parameter to control how sharp we want the attention head to be. Both can be achieved by setting $$W_q := \alpha R^{d}_{\Theta, -1} W_k,$$ in which $$\alpha > 0$$ is a temperature parameter. 
 
-As a result, for $$q_{n+1}$$ we have that $$q_{n+1}^T k_n = (d/2)\alpha$$ and $$ q_{n+1}^T k_m = \alpha \sum_{\ell = 1}^{d/2} \cos{((m - n)\theta_{\ell})} < (d/2)\alpha $$, for $$m < n$$. Thus, for large $$\alpha$$ the softmax operation in the attention layer should mostly select the key at position $$n$$. (TODO: here would be nice to have a better argument.)
+As a result, for $$q_{n+1}$$ we have that $$q_{n+1}^T k_n = (d/2)\alpha$$ and $$ q_{n+1}^T k_m = \alpha \sum_{\ell = 1}^{d/2} \cos{((m - n)\theta_{\ell})} < (d/2)\alpha $$, for $$m < n$$. Thus, for large $$\alpha$$ the softmax operation in the attention layer should mostly select the key at position $$n$$. Empirically (for sequence length 20, $$d = 768$$, $$d_{h} = 64$$) we have:
+
+$$\alpha = 1$$:
+
+![alpha=1](./rope/prev_1.png)
+
+
+$$\alpha = 10$$:
+
+![alpha=10](./rope/prev_10.png)
+
+
+$$\alpha = 100$$:
+
+![alpha=100](./rope/prev_100.png)
