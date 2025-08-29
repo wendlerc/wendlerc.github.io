@@ -147,6 +147,8 @@ and queries using \(q_m = R^{d}_{\Theta, m} W_q x_m\).</p>
 
 <p>As a result, for \(q_{n+1}\) we have that \(q_{n+1}^T k_n = (d/2)\alpha\) and \(q_{n+1}^T k_m = \alpha \sum_{\ell = 1}^{d/2} \cos{((m - n)\theta_{\ell})} &lt; (d/2)\alpha\), for \(m &lt; n\). Thus, for large \(\alpha\) the softmax operation in the attention layer should mostly select the key at position \(n\). Empirically (for sequence length 20, \(D = 768\), \(d = 64\)) we have:</p>
 
+<p><strong>Experiment 1 (previous token head by hand).</strong></p>
+
 <p>\(\alpha = 1\):</p>
 
 <p><img src="./rope/prev_1.png" alt="alpha=1" /></p>
@@ -159,7 +161,9 @@ and queries using \(q_m = R^{d}_{\Theta, m} W_q x_m\).</p>
 
 <p><img src="./rope/prev_100.png" alt="alpha=100" /></p>
 
-<h3 id="semantic-heads">Semantic heads</h3>
+<p><strong>Experiment 2 (finding purely positional heads).</strong> If transformers converge to an implementation similar to the one presented here, which leverages this single constant dimension (and is equivalent to having a one-dimensional subspace spanned by $u$ with the property \(u^T x_i = c\) with \(c \in \mathbb{R}\), for all \(i\)), it should be possible to find purely positional heads by searching for heads with \(\mbox{rank}(W_Q) = \mbox{rank}(W_K) = 1\). There may be other rank 1 heads as well, but the set of rank 1 heads should also contain all the purely positional ones that are implemented in this way.</p>
+
+<h2 id="semantic-heads">Semantic heads</h2>
 
 <p>Purely semantic heads, i.e., heads ignoring the positional information at first glance look challenging to implement with RoPE. This is because the pair-of-coordinate-wise rotations are applied to keys and queries right before computing the dot products. So strictly speaking it is not possible to fully get rid of the positional information. However, one can approximately get rid of it and minimize its effect of the positional information by only using the “last few” dimensions of the keys and queries for the semantic matching. The rationale behind this is to leverage the coordinates that are rotated the least (the last 2-components of the key and query vector are only rotated by an \(10^{-4}\) rad).</p>
 
@@ -175,6 +179,20 @@ and queries using \(q_m = R^{d}_{\Theta, m} W_q x_m\).</p>
 <p>The relative contribution of the positional embeddings can be minimized by only leveraging the dimensions corresponding to small rotation angles:</p>
 
 <p>\(W_Q = W_K = (\mbox{diag}(0, \dots, 0, 1, 1) \mid \mathbf{0})\), in which \(\mbox{diag}\) is a diagonal matrix. In this case \(q_{m}^T k_n = \cos((n-m) \theta_{d/2}) (x_{d-1}^2 + x_d^2)\), which for a typical choice of \(\theta_i = 10^{-4 \frac{2(i-1)}{d-2}}\) is equal to \(\cos\left(\frac{n-m}{10^4}\right)(x_{d-1}^2 + x_d^2)\). While this minimizes the effect of the rotations, it can be seen that there is still a small recency bias.</p>
+
+<p><strong>RoPE bottleneck.</strong> Thus, it seems like RoPE creates an even tighter bottleneck than the small dimensionality of the attention heads themselves \(d_{\text{semantic}} &lt;&lt; d &lt;&lt; D\), in which \(d_{\text{semantic}}\) denotes the number of dimensions that lend themselves the most for implementing semantic attention heads.</p>
+
+<p><strong>Experiment 3 (searching semantic heads).</strong> It should be possible to search for semantic heads by searching for \(W_Q x_m, W_K x_n\) that are bottom heavy or alternatively by looking for bottom heavy \(W_Q\) and \(W_K\).</p>
+
+<p><strong>Experiment 4 (turning off RoPE).</strong> Given that RoPE seems to create these complications for creating purely semantic heads, it might make sense to insert layers without RoPE or let attention heads learn whether or not to use RoPE.</p>
+
+<p><strong>Question 1 (Does the RoPE bottleneck have downstream effects?)</strong> If for semantic matching only a few dimensions are useful, how does that interact with the rest of the network? Considering a single semantic attention head, I wonder to which degree it is re-used. Are there semantic induction heads that are used for many different things? E.g., for matching countries and matching names and so on?</p>
+
+<h1 id="dealing-with-the-attention-head-bottleneck">Dealing with the attention head bottleneck</h1>
+
+<p>So far we only revised how to compute attention patterns. However, we also need to move information though the head. This is done by first downprojecting with \(W_V \in \mathbb{R}^{d \times D}\) and then upprojecting using \(W_O \in \mathbb{R}^{D \times d}\). All information that want’s to flow through a head, has to go through \(W_O W_V\) or in other words \(x_{\text{out}} = W_O W_V x\). This raises several questions.</p>
+
+<p><strong>Question 2 (Are there “single” heads that can approximately transport all tokens or is the vocabulary split across multiple heads?)</strong> E.g., real previous token heads usually look exactly like the one we implemented by hand above (with \(\alpha = 100\)). This suggests that the head does not discriminate between different token identities. Similarly, transformers usually are capable to implement the famous induction pattern “A B … A -&gt; B” for all combinations of A and B (however, I think people rarely check whether individual induction heads “work” for all tokens). This raises the question how exactly transformers represent even basic things like token identities between 32000 (in Llama2) and &gt;100.000 (in more recent models) tokens with in \(d\) (= 128 in Llama2 (?)) dimensions. A naive baseline would be to, e.g., project onto the top-\(d\) principal components of $W_E$. However, this approach would be lossy. Does superposition come to the rescue (again) or do model’s always dedciate several \(W_O W_V\)’s for copying? Note that the notation here is confusing because I omitted head-indices.</p>
 
 </body>
 </html>
