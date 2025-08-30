@@ -5,17 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Create spaceship cursor element
     const spaceshipCursor = document.createElement('div');
     spaceshipCursor.className = 'spaceship-cursor';
-    spaceshipCursor.style.display = 'none'; // Hide initially
     document.body.appendChild(spaceshipCursor);
-    
-    // Animation control variables
-    let animationRunning = false;
-    let animationId = null;
-    let timerInterval = null;
-    
-    // Get toggle button
-    const toggleBtn = document.getElementById('toggle-btn');
-    const toggleIcon = toggleBtn.querySelector('i');
     
     // Set canvas size to window size
     function resizeCanvas() {
@@ -38,74 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameStartTime = Date.now();
     let gameTime = 0;
     let finalTime = 0;
-    
-    // Toggle button event listener
-    toggleBtn.addEventListener('click', () => {
-        if (animationRunning) {
-            stopAnimation();
-        } else {
-            startAnimation();
-        }
-    });
-    
-    // Function to start animation
-    function startAnimation() {
-        if (animationRunning) return;
-        
-        animationRunning = true;
-        toggleBtn.classList.add('playing');
-        toggleIcon.className = 'fas fa-pause';
-        
-        // Reset game state
-        hitCounter = 0;
-        window.hitCounter = hitCounter;
-        gamePhase = 0;
-        gameStartTime = Date.now();
-        gameTime = 0;
-        finalTime = 0;
-        
-        // Start timer
-        timerInterval = setInterval(updateTimer, 1000);
-        
-        // Show game stats and cursor
-        document.getElementById('game-stats').style.display = 'block';
-        spaceshipCursor.style.display = 'block';
-        document.body.style.cursor = 'none'; // Hide standard cursor, show spaceship
-        canvas.style.cursor = 'none'; // Hide cursor on canvas too
-        
-        // Start animations
-        animate(0);
-    }
-    
-    // Function to stop animation
-    function stopAnimation() {
-        if (!animationRunning) return;
-        
-        animationRunning = false;
-        toggleBtn.classList.remove('playing');
-        toggleIcon.className = 'fas fa-play';
-        
-        // Stop timer
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-        
-        // Stop animations
-        if (animationId) {
-            cancelAnimationFrame(animationId);
-            animationId = null;
-        }
-        
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Hide game stats and cursor
-        document.getElementById('game-stats').style.display = 'none';
-        spaceshipCursor.style.display = 'none';
-        document.body.style.cursor = 'default'; // Restore standard cursor
-        canvas.style.cursor = 'default'; // Restore cursor on canvas too
-    }
+    let timerInterval = null;
     
     // Start the timer
     function startTimer() {
@@ -976,15 +899,13 @@ document.addEventListener('DOMContentLoaded', () => {
           ctx.arc(shockwave.x, shockwave.y, shockwave.radius, 0, Math.PI * 2);
           ctx.stroke();
           
-                // Continue animation only if running
-      if (animationRunning) {
-          animationId = requestAnimationFrame(animate);
-      }
+          // Continue animation
+          requestAnimationFrame(animate);
         }
       };
       
-      // Start animation (now controlled by toggle)
-      // animate();
+      // Start animation
+      animate();
     }
     
     // Animation loop with delta time for consistent speed
@@ -1101,12 +1022,10 @@ document.addEventListener('DOMContentLoaded', () => {
         drawExplosion();
       }
       
-      // Request next frame only if running
-      if (animationRunning) {
-          animationId = requestAnimationFrame(animate);
-      }
+      // Request next frame
+      requestAnimationFrame(animate);
     }
     
-    // Start animation (now controlled by toggle)
-    // animate(0);
+    // Start animation
+    animate(0);
   });
