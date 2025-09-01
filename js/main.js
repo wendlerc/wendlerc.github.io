@@ -39,13 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameTime = 0;
     let finalTime = 0;
     
-    // Toggle button event listener
+    // Play button event listener - only start, no toggle
     toggleBtn.addEventListener('click', () => {
-        if (animationRunning) {
-            stopAnimation();
-        } else {
-            startAnimation();
-        }
+        startAnimation();
     });
     
     // Function to start animation
@@ -53,8 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (animationRunning) return;
         
         animationRunning = true;
-        toggleBtn.classList.add('playing');
-        toggleIcon.className = 'fas fa-pause';
+        
+        // Hide the toggle button completely after first play
+        document.getElementById('animation-toggle').style.display = 'none';
         
         // Reset game state
         hitCounter = 0;
@@ -77,35 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         animate(0);
     }
     
-    // Function to stop animation
-    function stopAnimation() {
-        if (!animationRunning) return;
-        
-        animationRunning = false;
-        toggleBtn.classList.remove('playing');
-        toggleIcon.className = 'fas fa-play';
-        
-        // Stop timer
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-        
-        // Stop animations
-        if (animationId) {
-            cancelAnimationFrame(animationId);
-            animationId = null;
-        }
-        
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Hide game stats and cursor
-        document.getElementById('game-stats').style.display = 'none';
-        spaceshipCursor.style.display = 'none';
-        document.body.style.cursor = 'default'; // Restore standard cursor
-        canvas.style.cursor = 'default'; // Restore cursor on canvas too
-    }
+
     
     // Start the timer
     function startTimer() {
