@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timerInterval = setInterval(updateTimer, 1000);
         
         // Show game stats and cursor
-        document.getElementById('game-stats').style.display = 'block';
+        document.getElementById('game-stats').style.display = 'flex';
         spaceshipCursor.style.display = 'block';
         document.body.style.cursor = 'none'; // Hide standard cursor, show spaceship
         canvas.style.cursor = 'none'; // Hide cursor on canvas too

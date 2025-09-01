@@ -239,7 +239,7 @@ a:hover {
   top: 10px;
   right: 10px;
   z-index: 100;
-  display: flex;
+  display: none; /* Hide initially */
   flex-direction: column;
   align-items: flex-end;
 }
@@ -250,11 +250,23 @@ a:hover {
   font-weight: bold;
 }
 
+/* Bottom Controls Container */
+.bottom-controls {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 1000;
+}
+
 /* Background Animation Toggle */
 #animation-toggle {
   position: fixed;
-  top: 20px;
-  right: 120px; /* Position closer to the game stats */
+  bottom: 20px;
+  right: 70px; /* Position to the left of the sound button (which is at right: 20px) */
   z-index: 1000;
 }
 
@@ -263,10 +275,10 @@ a:hover {
   color: white;
   border: none;
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 14px;
   transition: all 0.3s ease;
   box-shadow: 0 2px 10px rgba(0,0,0,0.2);
 }

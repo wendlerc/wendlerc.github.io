@@ -11,5 +11,3 @@
 * [The little book of deep learning](https://fleuret.org/francois/lbdl.html)
 * [Probabilistic artificial intelligence course material](https://arxiv.org/abs/2502.05244)
 
-## My bachelor thesis
-* [Das stochastische Gradientenverfahren](https://drive.google.com/file/d/1kcd7ypDvmzq_sIUqRg4KuxRMR1jrnfA8/view?usp=sharing); adding this here because this had a lot of traffic on my old website, this is only useful for German speakers;
