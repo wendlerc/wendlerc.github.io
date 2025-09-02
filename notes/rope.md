@@ -3,7 +3,7 @@
 **08/19/25,**
 **last updated: 08/29/25**
 
-If you find mistakes or typos please reach out to me.
+If you find mistakes or typos please reach out to me. Note that while I list several experiments, most of those are only ideas for experiments and I did not run them yet. If I ran an experiment, I fill in the key results.
 
 ## Summary
 
@@ -62,7 +62,7 @@ $$W_q$$ such that $$W_q x_{n+1}$$ matches $$R^{d}_{\Theta, -1} (1, 0, 1, 0, \cdo
 
 As a result, for $$q_{n+1}$$ we have that $$q_{n+1}^T k_n = (d/2)\alpha$$ and $$ q_{n+1}^T k_m = \alpha \sum_{\ell = 1}^{d/2} \cos{((m - n)\theta_{\ell})} < (d/2)\alpha $$, for $$m < n$$. Thus, for large $$\alpha$$ the softmax operation in the attention layer should mostly select the key at position $$n$$. Empirically (for sequence length 20, $$D = 768$$, $$d = 64$$) we have:
 
-**Experiment 1 (previous token head by hand).**
+**Experiment 1 (previous token head by hand).** Implementing above construction yields the following attention patterns.
 
 $$\alpha = 1$$:
 
@@ -78,7 +78,7 @@ $$\alpha = 100$$:
 
 ![alpha=100](./rope/prev_100.png)
 
-**Experiment 2 (finding purely positional heads).** If transformers converge to an implementation similar to the one presented here, which leverages this single constant dimension (and is equivalent to having a one-dimensional subspace spanned by $u$ with the property $$u^T x_i = c$$ with $$c \in \mathbb{R}$$, for all $$i$$), it should be possible to find purely positional heads by searching for heads with $$\mbox{rank}(W_Q) = \mbox{rank}(W_K) = 1$$. There may be other rank 1 heads as well, but the set of rank 1 heads should also contain all the purely positional ones that are implemented in this way.
+**Experiment 2 (finding purely positional heads).** If transformers converge to an implementation similar to the one presented here, which leverages this single constant dimension (and is equivalent to having a one-dimensional subspace spanned by $$u$$ with the property $$u^T x_i = c$$ with $$c \in \mathbb{R}$$, for all $$i$$), it should be possible to find purely positional heads by searching for heads with $$\mbox{rank}(W_Q) = \mbox{rank}(W_K) = 1$$. There may be other rank 1 heads as well, but the set of rank 1 heads should also contain all the purely positional ones that are implemented in this way.
 
 ## Semantic heads
 
@@ -86,7 +86,9 @@ Purely semantic heads, i.e., heads ignoring the positional information at first 
 
 Let's do a small example, in which we first don't address the positional encodings at all and then one in which we leverage only the last few coordinates.
 
-#### RoPE introduces a recency bias
+#### RoPE introduces a recency bias (?)
+
+In general, RoPE does **not** introduce a recency bias see [related work](https://arxiv.org/abs/2410.06205). However, our construction for semantic heads does introduce a recency bias -- also ours is similar to the one in the related work, which also finds heads like this in Gemma2.
 
 Let $$x_1 = x_2 = x_3 = \cdots = x_n = x$$ and let $$W_Q = W_K = (\mathbf{I}_{d} \mid \mathbf{0})$$, in which $$\mathbf{I}_d$$ is the $$d$$-dimensional identity matrix and $$\mathbf{0} \in \mathbb{R}^{d \times (D - d)}$$ a matrix of zeros. Let $$x'$$ denote the first $$d$$ components of $$x$$. The unnormalized attention scores become proportional to the cosine of the angle between $$x'$$ and $$R^{d}_{\Theta, n-m} x'$$: 
 $$q_{m}^T k_n = x'^T R^{d}_{\Theta, n-m} x' = \|x'\|_2^2\cos(\angle(x', R^{d}_{\Theta, n-m} x')),$$ which is maximized for $$n = m$$ (i.e. for $$R^d_{\Theta, 0} = I$$).
@@ -97,11 +99,36 @@ The relative contribution of the positional embeddings can be minimized by only 
 
 $$W_Q = W_K = (\mbox{diag}(0, \dots, 0, 1, 1) \mid \mathbf{0})$$, in which $$\mbox{diag}$$ is a diagonal matrix. In this case $$q_{m}^T k_n = \cos((n-m) \theta_{d/2}) (x_{d-1}^2 + x_d^2)$$, which for a typical choice of $$\theta_i = 10^{-4 \frac{2(i-1)}{d-2}}$$ is equal to $$\cos\left(\frac{n-m}{10^4}\right)(x_{d-1}^2 + x_d^2)$$. While this minimizes the effect of the rotations, it can be seen that there is still a small recency bias.
 
+**Experiment 3 (implementing semantic heads).** I implemented a simple semantic head by sampling a sequence of 1000 random vectors $$x_1, \dots, x_{1000}$$ in $$\mathbb{R}^D$$ and inserting semantics by sampling another smaller vector $$s \in \mathbb{R}^d$$. Then, I set the first $$d$$ components of $$x_{1000}$$ to $$s$$ and for all other vectors $$x_1, \dots, x_{999}$$ I set components $$d+1, \dots, 2d$$ to $$s$$. I construct a semantic head by defining $$W_Q = (\mbox{diag}(0_{d_0} 1_{d - d_0}) \mid \mathbf{0}_{d \times (D-d)})$$ and $$W_K = (\mathbf{0}_{d\times d} \mid \mbox{diag}(0_{d_0} 1_{d - d_0}) \mid \mathbf{0}_{d \times (D-2d)})$$,in which $$0_{d_0} \in \mathbb{R}^{d_0}$$ is a vector of $$d_0$$ zeros, $$1_{d - d_0} \in \mathbb{R}^{d - d_0}$$ is a vector of $$d - d_0$$ ones, thus, $$\mbox{diag}(0_{d_0} 1_{d-d_0})$$ denotes a diagonal matrix with the first $$d_0$$ diagonal entries set to zero and the next $$d - d_0$$ ones set to one, and $$\mathbf{0}_{a \times b}$$ denotes a $$a \times b$$ matrix of zeros. 
+
+*Intuition:* The idea of this construction is that a perfect semantic head would match all predecessors equally well. However, as shown by running this experiment with different choices for $$d_0$$ this is not exactly the case. In the plots below I visualize the normalized attention scores for the query of the last token. As can be seen, choosing only the dimensions corresponding to rotations by small angles allows to approximate a **true semantic head** (agnostic to position) pretty well.  
+
+$$d_0 = 0$$:
+
+![d0=0](./rope/semantic.png)
+
+$$d_0 = d/2$$:
+
+![d0=d_2](./rope/semantic_2.png)
+
+$$d_0 = d - d/4$$:
+
+![d0=d_4](./rope/semantic_4.png)
+
+$$d_0 = d - d/8$$:
+
+![d0=d_8](./rope/semantic_8.png)
+
+$$d_0 = d - 2$$:
+
+![d0=d_last2](./rope/semantic_last_2.png)
+
+
 **RoPE bottleneck.** Thus, it seems like RoPE creates an even tighter bottleneck than the small dimensionality of the attention heads themselves $$d_{\text{semantic}} << d << D$$, in which $$d_{\text{semantic}}$$ denotes the number of dimensions that lend themselves the most for implementing semantic attention heads. 
 
-**Experiment 3 (searching semantic heads).** It should be possible to search for semantic heads by searching for $$W_Q x_m, W_K x_n $$ that are bottom heavy or alternatively by looking for bottom heavy $$W_Q$$ and $$W_K$$.
+**Experiment 4 (searching semantic heads).** It should be possible to search for semantic heads by searching for $$W_Q x_m, W_K x_n $$ that are bottom heavy or alternatively by looking for bottom heavy $$W_Q$$ and $$W_K$$.
 
-**Experiment 4 (turning off RoPE).** Given that RoPE seems to create these complications for creating purely semantic heads, it might make sense to insert layers without RoPE or let attention heads learn whether or not to use RoPE.
+**Experiment 5 (turning off RoPE).** Given that RoPE seems to create these complications for creating purely semantic heads, it might make sense to insert layers without RoPE or let attention heads learn whether or not to use RoPE.
 
 **Question 1 (Does the RoPE bottleneck have downstream effects?)** If for semantic matching only a few dimensions are useful, how does that interact with the rest of the network? Considering a single semantic attention head, I wonder to which degree it is re-used. Are there semantic induction heads that are used for many different things? E.g., for matching countries and matching names and so on?
 
@@ -111,5 +138,5 @@ So far we only revised how to compute attention patterns. However, we also need 
 
 **Question 2 (Are there "single" heads that can approximately transport all tokens or is the vocabulary split across multiple heads?)** E.g., real previous token heads usually look exactly like the one we implemented by hand above (with $$\alpha = 100$$). This suggests that the head does not discriminate between different token identities. Similarly, transformers usually are capable to implement the famous induction pattern "A B ... A -> B" for all combinations of A and B (however, I think people rarely check whether individual induction heads "work" for all tokens). This raises the question how exactly transformers represent even basic things like token identities between 32000 (in Llama2) and >100.000 (in more recent models) tokens with in $$d$$ (= 128 in Llama2 (?)) dimensions. A naive baseline would be to, e.g., project onto the top-$$d$$ principal components of $$W_E$$. However, this approach would be lossy. Does superposition come to the rescue (again) or do model's always dedciate several $$W_O W_V$$'s for copying? Note that the notation here is confusing because I omitted head-indices.
 
-**Experiment 5 (Check heads)** Come up with an experiment to check how exactly, e.g., previous token heads or induction heads copy token-identity-information. Is there a single head to rule them all? E.g., is there a single copying induction head that can boost the final token probability for all possible tokens?
+**Experiment 6 (Check heads)** Come up with an experiment to check how exactly, e.g., previous token heads or induction heads copy token-identity-information. Is there a single head to rule them all? E.g., is there a single copying induction head that can boost the final token probability for all possible tokens?
 
