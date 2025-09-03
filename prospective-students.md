@@ -2,7 +2,7 @@
 **Chris Wendler, 09/02/2025**
 
 
-I am always looking for great students and collaborators and am happy if you reach out to me directly to ask for collaboration opportunities. **However, due to the recent high demand, I am not going to respond to requests anymore unless they contain a work sample (spend ~2–8 hours to perform some experiments and write a short report) on one of the topics or models listed below.** *If you reach out to me please use my Northeastern email address and briefly introduce yourself. In particular, indicate whether you are affiliated with Northeastern or something else and the scope of the collaboration.* For the work sample, please include a short summary about how you allocated your time (this part does not have to be very detailed).
+I am always looking for great students and collaborators and am happy if you reach out to me directly to ask for collaboration opportunities. **However, due to the recent high demand, I am not going to respond to requests anymore unless they contain a work sample (spend ~2–8 hours to perform some experiments and write a short report) on one of the topics or models listed below (e.g., the [visual interpretability agent](./resources/tasks/agent.html){:target="_blank"} would be a good starting point).** *If you reach out to me please use my Northeastern email address and briefly introduce yourself. In particular, indicate whether you are affiliated with Northeastern or something else and the scope of the collaboration.* For the work sample, please include a short summary about how you allocated your time (this part does not have to be very detailed).
 
 ---
 
@@ -11,8 +11,9 @@ I am always looking for great students and collaborators and am happy if you rea
 Currently, I work on the following models and broad research directions:
 
 - **SDXL, FLUX:** How do text-to-image models generate images? What are the representations learned, how do they interact with each other? How to surface the purely visual features? Explore the combination of diffusion inversion and SAE features. [[prior work]](https://sdxl-unbox.epfl.ch/){:target="_blank"}
+- **Multimodal interpretability agent:** As we are scaling our SDXL/FLUX interpretability efforts, the need for automated evaluation methods becomes apparent. A good first step towards this direction will be to create interpretability agents powered by visual-language models and equip them with tools that facilitate the analysis of visual features inside of SDXL/FLUX as well as interventions. [[related work]](https://arxiv.org/abs/2404.14394){:target="_blank"} [[our prior work and resources]](https://sdxl-unbox.epfl.ch/){:target="_blank"} [[take-home task]](./resources/tasks/agent.html)
 - **World Models:** Understand representations learned by world models. Do they form persistent representations without explicit supervision? Do they learn something like intuitive physics (i.e., physics at the level of abstraction useful for modeling the training data)? How can we distill a foundation model's general world knowledge into an action/control conditioned world model? [[resources]](https://github.com/Wayfarer-Labs/owl-wms/issues/17){:target="_blank"}
-- **ESMFold:** How does ESMFold fold a protein?
+- **ESMFold:** How does ESMFold fold a protein? [[related work 1]](https://www.science.org/doi/10.1126/science.ade2574){:target="_blank"} [[related work 2]](https://www.reticular.ai/research/interpretable-protein-structure-prediction){:target="_blank"}
 - **R1:** What are the elements of reasoning learned by R1 and what’s the difference between reasoning and base model? [[resources]](https://arborproject.github.io/){:target="_blank"}
 - **OLMO2:** Training dynamics of multilingual representations and instruction following. How do multilingual representations form? Is there something like an instruction following circuit, and how/when does it form? [[prior work]](./resources/llm.bib){:target="_blank"}
 
