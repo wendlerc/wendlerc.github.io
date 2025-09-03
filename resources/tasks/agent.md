@@ -6,6 +6,6 @@ Akin to [MAIA](https://arxiv.org/abs/2404.14394){:target="_blank"} equip a VLM, 
 - for a given feature, compute images for which this feature was on,
 - performing feature interventions by turning on / off features
 
-and prompt it / provide it with additional scaffolding to come up with hypotheses about features as well as functionality to validate those hypotheses. Our current **goal** for this agent is not so much only coming up with explanations of features but more to **perform targetted interventions on generated images** as is required for our recent [representation-based editing benchmark](https://github.com/wendlerc/RIEBench){:target="_blank"}. 
+and prompt it / provide it with additional scaffolding to come up with hypotheses about features as well as functionality to validate those hypotheses. Our current **goal** for this agent is not so much only coming up with explanations of features but more to **perform targeted interventions on generated images** as is required for our recent [representation-based editing benchmark](https://github.com/wendlerc/RIEBench){:target="_blank"}. 
 
-We provide extensive resources including desriptions and code for our SDXL/FLUX SAE feautures [here](https://sdxl-unbox.epfl.ch){:target="_blank"}.
+We provide extensive resources including descriptions and code for our SDXL/FLUX SAE features [here](https://sdxl-unbox.epfl.ch){:target="_blank"}.
