@@ -108,7 +108,10 @@
           };
 
           const results = await session.run(feeds);
-          const data = results.v_pred.data;
+          let data = results.v_pred.data;
+          if (data === undefined && typeof results.v_pred.getData === 'function') {
+            data = await results.v_pred.getData();
+          }
           const dt = ts[i] - ts[i + 1];
 
           const vCond = data.slice(0, C * H * W);
@@ -183,7 +186,8 @@
           document.getElementById('startBtn').disabled = false;
           document.getElementById('stopBtn').disabled = false;
         } catch (err) {
-          document.getElementById('statusText').textContent = 'Error: ' + err.message;
+          const msg = (err && (err.message || err.toString())) || 'Unknown error';
+          document.getElementById('statusText').textContent = 'Error: ' + msg;
           console.error(err);
         }
       })();
