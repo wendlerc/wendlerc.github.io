@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Pong2P ONNX Debug</title>
+  <style>
+    body { font-family: monospace; padding: 16px; background:#111; color:#eee; }
+    #log { white-space: pre-wrap; background:#222; padding: 12px; margin: 12px 0; max-height: 400px; overflow: auto; font-size: 12px; }
+    .err { color: #f80; }
+    .ok { color: #0f8; }
+    button { padding: 8px 12px; margin: 4px; cursor: pointer; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+</head>
+<body>
+  <h1>Pong2P ONNX Debug</h1>
+  <p>Loads model and runs warmup. Full error details below.</p>
+  <button onclick="run()">Run</button>
+  <button onclick="navigator.clipboard.writeText(logEl.textContent); alert('Copied')">Copy log</button>
+  <div id="log"></div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    function log(msg, isErr) {
+      const line = '[' + new Date().toISOString().slice(11,23) + '] ' + msg;
+      logEl.textContent += line + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+      if (isErr) logEl.classList.add('err');
+    }
+    function errDetail(e) {
+      if (!e) return 'null';
+      try {
+        return JSON.stringify({
+          name: e.name,
+          message: e.message,
+          stack: e.stack,
+          code: e.code,
+          errno: e.errno,
+          ...Object.fromEntries(Object.entries(e).filter(([k]) => !['name','message','stack'].includes(k)))
+        }, null, 2);
+      } catch (_) { return String(e); }
+    }
+
+    async function run() {
+      logEl.textContent = '';
+      logEl.classList.remove('err');
+      if (typeof ort === 'undefined') { log('ort undefined!', true); return; }
+      log('ort loaded');
+      if (ort.env?.wasm) {
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+        log('wasmPaths set');
+      }
+      try {
+        log('Creating session (wasm only)...');
+        const session = await ort.InferenceSession.create('./pong2p.onnx', {
+          executionProviders: ['wasm'],
+          graphOptimizationLevel: 'disabled',
+          enableCpuMemArena: false
+        });
+        log('Session created');
+        const W=24,H=24,C=3;
+        function randn(n) {
+          const out = new Float32Array(n);
+          for (let i = 0; i < n; i++) {
+            let u = 0, v = 0;
+            while (u === 0) u = Math.random();
+            while (v === 0) v = Math.random();
+            out[i] = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+          }
+          return out;
+        }
+        const z0 = randn(2 * 1 * C * H * W);
+        const a0 = new BigInt64Array([1n, 1n, 0n, 0n]);
+        const t0 = new Float32Array([0.5, 0.5]);
+        log('Running warmup...');
+        const res = await session.run({
+          z: new ort.Tensor('float32', z0, [2, 1, C, H, W]),
+          actions: new ort.Tensor('int64', a0, [2, 1, 2]),
+          t: new ort.Tensor('float32', t0, [2, 1])
+        });
+        const out = res.v_pred || res[0];
+        if (out?.getData) await out.getData();
+        log('Warmup OK', false);
+      } catch (e) {
+        log('ERROR:', true);
+        log(errDetail(e), true);
+        log('--- raw ---', true);
+        log(String(e), true);
+      }
+    }
+    run();
+  </script>
+</body>
+</html>
