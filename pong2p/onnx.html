@@ -57,7 +57,9 @@
     </div>
 
     <script>
-      let MODEL_URL = '';
+      if (typeof ort !== 'undefined' && ort.env && ort.env.wasm) {
+        ort.env.wasm.numThreads = 1;
+      }
       const W = 24; const H = 24; const C = 3;
 
       let session = null;
@@ -167,29 +169,41 @@
       }
 
       (async () => {
-        const loadSession = async (providers) => {
-          return ort.InferenceSession.create('./pong2p.onnx', {
-            executionProviders: providers,
-            graphOptimizationLevel: 'all'
-          });
-        };
-        try {
-          document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
-          try {
-            session = await loadSession(['webgpu', 'webgl', 'wasm']);
-          } catch (e1) {
-            document.getElementById('statusText').textContent = 'GPU failed, trying CPU (WASM)...';
-            session = await loadSession(['wasm']);
-          }
-          document.getElementById('statusText').textContent = 'Warming up...';
+        const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx', {
+          executionProviders: providers,
+          graphOptimizationLevel: 'all'
+        });
+        const warmup = async (s) => {
           const z0 = randn(2 * C * H * W);
           const a0 = new BigInt64Array([1n, 1n, 0n, 0n]);
           const t0 = new Float32Array([0.5, 0.5]);
-          await session.run({
+          await s.run({
             z: new ort.Tensor('float32', z0, [2, 1, C, H, W]),
             actions: new ort.Tensor('int64', a0, [2, 1, 2]),
             t: new ort.Tensor('float32', t0, [2, 1])
           });
+        };
+        try {
+          const isMac = /Mac|iPhone|iPad/.test(navigator.platform) || /Mac/.test(navigator.userAgent);
+          document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
+          const providers = isMac ? ['wasm'] : ['webgpu', 'webgl', 'wasm'];
+          try {
+            session = await loadSession(providers);
+          } catch (e1) {
+            if (!isMac) {
+              document.getElementById('statusText').textContent = 'GPU failed, trying CPU (WASM)...';
+              session = await loadSession(['wasm']);
+            } else throw e1;
+          }
+          document.getElementById('statusText').textContent = 'Warming up...';
+          try {
+            await warmup(session);
+          } catch (warmupErr) {
+            document.getElementById('statusText').textContent = 'GPU inference failed, switching to CPU (WASM)...';
+            if (session && session.release) session.release();
+            session = await loadSession(['wasm']);
+            await warmup(session);
+          }
           document.getElementById('overlay').classList.add('hidden');
           document.getElementById('startBtn').disabled = false;
           document.getElementById('stopBtn').disabled = false;
