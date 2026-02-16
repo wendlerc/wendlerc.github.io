@@ -10,7 +10,7 @@
     .ok { color: #0f8; }
     button { padding: 8px 12px; margin: 4px; cursor: pointer; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/ort.min.js"></script>
 </head>
 <body>
   <h1>Pong2P ONNX Debug</h1>
@@ -48,7 +48,7 @@
       log('ort loaded');
       if (ort.env?.wasm) {
         ort.env.wasm.numThreads = 1;
-        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/';
         log('wasmPaths set');
       }
       try {
