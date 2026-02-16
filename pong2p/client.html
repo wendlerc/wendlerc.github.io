@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pong 2-Player (Client-Side)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html, body { margin:0; min-height:100%; background:#111; color:#eee; font-family: system-ui, sans-serif; }
+      #app { padding: 16px; }
+      h1 { font-size: 1.5rem; }
+      #canvasContainer { margin: 12px 0; background:#222; display: inline-block; }
+      canvas#frame { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+      .controls-box { margin-top: 16px; padding: 12px; background: #222; border-radius: 8px; max-width: 420px; }
+      .controls-box h3 { margin: 0 0 8px 0; font-size: 14px; }
+      .controls-box p { margin: 4px 0; font-size: 13px; color: #aaa; }
+      .score { font-size: 18px; font-family: monospace; margin: 8px 0; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <h1>Pong 2-Player <span style="color:#0f8; font-size:14px;">(100% Client-Side)</span></h1>
+      <p style="color:#888;">No server. Runs entirely in your browser. W/S = left paddle, ↑/↓ = right paddle.</p>
+      <div class="score">Left: <span id="scoreLeft">0</span> &nbsp; Right: <span id="scoreRight">0</span></div>
+      <div id="canvasContainer">
+        <canvas id="frame" width="240" height="240"></canvas>
+      </div>
+      <div class="controls-box">
+        <h3>Controls</h3>
+        <p><b>Left paddle (W/S):</b> W = up, S = down</p>
+        <p><b>Right paddle (↑/↓):</b> Arrow Up = up, Arrow Down = down</p>
+        <p style="margin-top: 8px; color: #0f8;">Everything runs on your GPU — no backend, no network.</p>
+      </div>
+    </div>
+
+    <script>
+      const W = 24, H = 24;
+      const PADDLE_W = 2, PADDLE_H = 6;
+      const BALL_R = 1;
+      const PADDLE_SPEED = 1.2;
+      const BALL_SPEED = 0.8;
+
+      const canvas = document.getElementById('frame');
+      const ctx = canvas.getContext('2d');
+
+      let leftY = H / 2 - PADDLE_H / 2;
+      let rightY = H / 2 - PADDLE_H / 2;
+      let ballX = W / 2, ballY = H / 2;
+      let ballVx = BALL_SPEED, ballVy = 0.1;
+      let scoreLeft = 0, scoreRight = 0;
+      let leftVel = 0, rightVel = 0;
+
+      const PADDLE_L = 1, PADDLE_R = W - 1 - PADDLE_W;
+
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+      function tick() {
+        leftY = clamp(leftY + leftVel, 0, H - PADDLE_H);
+        rightY = clamp(rightY + rightVel, 0, H - PADDLE_H);
+
+        ballX += ballVx;
+        ballY += ballVy;
+
+        if (ballY <= BALL_R || ballY >= H - BALL_R) ballVy *= -1;
+        ballY = clamp(ballY, BALL_R, H - BALL_R);
+
+        const leftPaddle = { x: PADDLE_L, y: leftY, w: PADDLE_W, h: PADDLE_H };
+        const rightPaddle = { x: PADDLE_R, y: rightY, w: PADDLE_W, h: PADDLE_H };
+
+        if (ballX - BALL_R <= leftPaddle.x + leftPaddle.w && ballX + BALL_R >= leftPaddle.x &&
+            ballY >= leftPaddle.y && ballY <= leftPaddle.y + leftPaddle.h) {
+          ballVx = Math.abs(ballVx);
+          ballVy += (leftVel * 0.3);
+        }
+        if (ballX + BALL_R >= rightPaddle.x && ballX - BALL_R <= rightPaddle.x + rightPaddle.w &&
+            ballY >= rightPaddle.y && ballY <= rightPaddle.y + rightPaddle.h) {
+          ballVx = -Math.abs(ballVx);
+          ballVy += (rightVel * 0.3);
+        }
+
+        if (ballX < -1) { scoreRight++; resetBall(1); }
+        if (ballX > W + 1) { scoreLeft++; resetBall(-1); }
+
+        ballVy = clamp(ballVy, -1.5, 1.5);
+      }
+
+      function resetBall(direction) {
+        ballX = W / 2;
+        ballY = H / 2;
+        ballVx = direction * BALL_SPEED;
+        ballVy = (Math.random() - 0.5) * 0.5;
+      }
+
+      function render() {
+        const scale = canvas.width / W;
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#eee';
+        ctx.fillRect(PADDLE_L * scale, leftY * scale, PADDLE_W * scale, PADDLE_H * scale);
+        ctx.fillRect(PADDLE_R * scale, rightY * scale, PADDLE_W * scale, PADDLE_H * scale);
+
+        ctx.beginPath();
+        ctx.arc((ballX + 0.5) * scale, (ballY + 0.5) * scale, BALL_R * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#333';
+        ctx.setLineDash([scale, scale]);
+        ctx.beginPath();
+        ctx.moveTo((W / 2) * scale, 0);
+        ctx.lineTo((W / 2) * scale, canvas.height);
+        ctx.stroke();
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'w' || e.key === 'W') leftVel = -PADDLE_SPEED;
+        else if (e.key === 's' || e.key === 'S') leftVel = PADDLE_SPEED;
+        else if (e.key === 'ArrowUp') rightVel = -PADDLE_SPEED;
+        else if (e.key === 'ArrowDown') rightVel = PADDLE_SPEED;
+        if (['w','W','s','S','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
+      });
+
+      document.addEventListener('keyup', (e) => {
+        if (e.key === 'w' || e.key === 'W' || e.key === 's' || e.key === 'S') leftVel = 0;
+        else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') rightVel = 0;
+      });
+
+      function loop() {
+        tick();
+        render();
+        document.getElementById('scoreLeft').textContent = scoreLeft;
+        document.getElementById('scoreRight').textContent = scoreRight;
+        requestAnimationFrame(loop);
+      }
+
+      ctx.imageSmoothingEnabled = false;
+      loop();
+    </script>
+  </body>
+</html>
