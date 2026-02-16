@@ -113,9 +113,12 @@
           };
 
           const results = await session.run(feeds);
-          const out = results.v_pred || results[0];
+          let out = results.v_pred;
+          if (!out && results[0]) out = results[0];
+          if (!out && results instanceof Map) out = results.get('v_pred') || results.values().next().value;
           let data = out?.data;
           if (!data && typeof out?.getData === 'function') data = await out.getData();
+          if (!data) throw new Error('No output data from model');
           const dt = ts[i] - ts[i + 1];
 
           const vCond = data.slice(0, C * H * W);
@@ -173,7 +176,7 @@
       (async () => {
         const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx', {
           executionProviders: providers,
-          graphOptimizationLevel: providers[0] === 'wasm' ? 'basic' : 'all',
+          graphOptimizationLevel: 'disabled',
           enableCpuMemArena: false
         });
         const warmup = async (s) => {
@@ -189,9 +192,8 @@
           if (out?.getData) await out.getData();
         };
         try {
-          // WebGL first: best compatibility (Safari, Firefox, mobile). WebGPU often fails on Mac/Safari.
           document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
-          const providerOrder = [['webgl', 'wasm'], ['webgpu', 'webgl', 'wasm'], ['wasm']];
+          const providerOrder = [['wasm'], ['webgl', 'wasm'], ['webgpu', 'webgl', 'wasm']];
           let lastErr = null;
           for (const providers of providerOrder) {
             try {
@@ -213,7 +215,8 @@
         } catch (err) {
           const msg = (err && (err.message || err.toString())) || 'Unknown error';
           document.getElementById('statusText').textContent = 'Error: ' + msg;
-          console.error(err);
+          console.error('[pong2p]', err);
+          if (err?.message) document.getElementById('statusText').title = err.message;
         }
       })();
 
