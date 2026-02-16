@@ -193,7 +193,8 @@
         };
         try {
           document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
-          const providerOrder = [['wasm'], ['webgl', 'wasm'], ['webgpu', 'webgl', 'wasm']];
+          // Skip WebGL: diffusion model uses LayerNorm/Attention which WebGL doesn't support (error 18036544)
+          const providerOrder = [['webgpu', 'wasm'], ['wasm']];
           let lastErr = null;
           for (const providers of providerOrder) {
             try {
