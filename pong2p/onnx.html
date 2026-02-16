@@ -57,8 +57,11 @@
     </div>
 
     <script>
-      if (typeof ort !== 'undefined' && ort.env && ort.env.wasm) {
-        ort.env.wasm.numThreads = 1;
+      if (typeof ort !== 'undefined' && ort.env) {
+        if (ort.env.wasm) {
+          ort.env.wasm.numThreads = 1;
+          ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/';
+        }
       }
       const W = 24; const H = 24; const C = 3;
 
@@ -171,7 +174,7 @@
       (async () => {
         const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx', {
           executionProviders: providers,
-          graphOptimizationLevel: 'all'
+          graphOptimizationLevel: providers[0] === 'wasm' ? 'basic' : 'all'
         });
         const warmup = async (s) => {
           const z0 = randn(2 * C * H * W);
