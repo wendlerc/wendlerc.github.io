@@ -167,12 +167,20 @@
       }
 
       (async () => {
-        try {
-          document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
-          session = await ort.InferenceSession.create('./pong2p.onnx', {
-            executionProviders: ['webgpu', 'webgl', 'wasm'],
+        const loadSession = async (providers) => {
+          return ort.InferenceSession.create('./pong2p.onnx', {
+            executionProviders: providers,
             graphOptimizationLevel: 'all'
           });
+        };
+        try {
+          document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
+          try {
+            session = await loadSession(['webgpu', 'webgl', 'wasm']);
+          } catch (e1) {
+            document.getElementById('statusText').textContent = 'GPU failed, trying CPU (WASM)...';
+            session = await loadSession(['wasm']);
+          }
           document.getElementById('statusText').textContent = 'Warming up...';
           const z0 = randn(2 * C * H * W);
           const a0 = new BigInt64Array([1n, 1n, 0n, 0n]);
