@@ -113,10 +113,9 @@
           };
 
           const results = await session.run(feeds);
-          let data = results.v_pred.data;
-          if (data === undefined && typeof results.v_pred.getData === 'function') {
-            data = await results.v_pred.getData();
-          }
+          const out = results.v_pred || results[0];
+          let data = out?.data;
+          if (!data && typeof out?.getData === 'function') data = await out.getData();
           const dt = ts[i] - ts[i + 1];
 
           const vCond = data.slice(0, C * H * W);
@@ -174,39 +173,40 @@
       (async () => {
         const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx', {
           executionProviders: providers,
-          graphOptimizationLevel: providers[0] === 'wasm' ? 'basic' : 'all'
+          graphOptimizationLevel: providers[0] === 'wasm' ? 'basic' : 'all',
+          enableCpuMemArena: false
         });
         const warmup = async (s) => {
           const z0 = randn(2 * C * H * W);
           const a0 = new BigInt64Array([1n, 1n, 0n, 0n]);
           const t0 = new Float32Array([0.5, 0.5]);
-          await s.run({
+          const res = await s.run({
             z: new ort.Tensor('float32', z0, [2, 1, C, H, W]),
             actions: new ort.Tensor('int64', a0, [2, 1, 2]),
             t: new ort.Tensor('float32', t0, [2, 1])
           });
+          const out = res.v_pred || res[0];
+          if (out?.getData) await out.getData();
         };
         try {
-          const isMac = /Mac|iPhone|iPad/.test(navigator.platform) || /Mac/.test(navigator.userAgent);
+          // WebGL first: best compatibility (Safari, Firefox, mobile). WebGPU often fails on Mac/Safari.
           document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
-          const providers = isMac ? ['wasm'] : ['webgpu', 'webgl', 'wasm'];
-          try {
-            session = await loadSession(providers);
-          } catch (e1) {
-            if (!isMac) {
-              document.getElementById('statusText').textContent = 'GPU failed, trying CPU (WASM)...';
-              session = await loadSession(['wasm']);
-            } else throw e1;
+          const providerOrder = [['webgl', 'wasm'], ['webgpu', 'webgl', 'wasm'], ['wasm']];
+          let lastErr = null;
+          for (const providers of providerOrder) {
+            try {
+              document.getElementById('statusText').textContent = `Loading (${providers[0]})...`;
+              session = await loadSession(providers);
+              document.getElementById('statusText').textContent = 'Warming up...';
+              await warmup(session);
+              break;
+            } catch (e) {
+              lastErr = e;
+              if (session && session.release) try { session.release(); } catch (_) {}
+              session = null;
+            }
           }
-          document.getElementById('statusText').textContent = 'Warming up...';
-          try {
-            await warmup(session);
-          } catch (warmupErr) {
-            document.getElementById('statusText').textContent = 'GPU inference failed, switching to CPU (WASM)...';
-            if (session && session.release) session.release();
-            session = await loadSession(['wasm']);
-            await warmup(session);
-          }
+          if (!session) throw lastErr || new Error('All backends failed');
           document.getElementById('overlay').classList.add('hidden');
           document.getElementById('startBtn').disabled = false;
           document.getElementById('stopBtn').disabled = false;
