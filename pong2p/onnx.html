@@ -175,7 +175,7 @@
       }
 
       (async () => {
-        const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx', {
+        const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx?v=2', {
           executionProviders: providers,
           graphOptimizationLevel: 'disabled',
           enableCpuMemArena: false

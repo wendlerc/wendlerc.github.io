@@ -53,7 +53,7 @@
       }
       try {
         log('Creating session (webgpu+wasm, then wasm)...');
-        const session = await ort.InferenceSession.create('./pong2p.onnx', {
+        const session = await ort.InferenceSession.create('./pong2p.onnx?v=2', {
           executionProviders: ['webgpu', 'wasm'],
           graphOptimizationLevel: 'disabled',
           enableCpuMemArena: false
