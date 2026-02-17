@@ -33,9 +33,9 @@
 
     <div id="app" tabindex="0" style="outline:none;">
       <h1>Pong 2-Player <span style="color:#f80; font-size:14px;">(ONNX / WebGPU)</span></h1>
-      <p style="color:#888;">Neural diffusion model runs in your browser. Fully standalone.</p>
+      <p style="color:#888;">1-step DMD distilled model runs in your browser. Fully standalone.</p>
       <div style="margin-bottom: 12px;">
-        <label>Steps: <input type="number" id="stepsInput" value="8" min="1" max="10" style="width:50px;" /></label>
+        <label>Steps: <input type="number" id="stepsInput" value="1" min="1" max="10" style="width:50px;" title="1-step DMD model" /></label>
         <label style="margin-left:12px;">CFG: <input type="number" id="cfgInput" value="1.0" min="0" max="5" step="0.1" style="width:50px;" /></label>
       </div>
       <div>
@@ -68,6 +68,9 @@
         }
       }
       const W = 24; const H = 24; const C = 3;
+      // KV-cache constants (match pong2p_onnx config)
+      const N_LAYERS = 8, N_HEADS = 20, D_HEAD = 16, TOKS_PER_FRAME = 65, N_WINDOW = 30;
+      const CACHE_SIZE = TOKS_PER_FRAME * (N_WINDOW - 1);
 
       let session = null;
       let running = false;
@@ -75,6 +78,64 @@
       let frameTimes = [];
       let offscreen = null;
       const actionLabels = ['INIT', 'NOOP', 'UP', 'DOWN'];
+      let useCache = false;
+
+      function createKVCache() {
+        const batch = 2;
+        return {
+          keys: new Float32Array(N_LAYERS * batch * CACHE_SIZE * N_HEADS * D_HEAD),
+          values: new Float32Array(N_LAYERS * batch * CACHE_SIZE * N_HEADS * D_HEAD),
+          localLoc: 0
+        };
+      }
+      function cacheGet(cache) {
+        if (cache.localLoc === 0) return null;
+        const batch = 2;
+        const len = cache.localLoc * N_HEADS * D_HEAD;
+        const k = new Float32Array(N_LAYERS * batch * cache.localLoc * N_HEADS * D_HEAD);
+        const v = new Float32Array(N_LAYERS * batch * cache.localLoc * N_HEADS * D_HEAD);
+        for (let L = 0; L < N_LAYERS; L++) {
+          for (let B = 0; B < batch; B++) {
+            const srcBase = ((L * 2 + B) * CACHE_SIZE) * N_HEADS * D_HEAD;
+            const dstBase = ((L * 2 + B) * cache.localLoc) * N_HEADS * D_HEAD;
+            for (let i = 0; i < cache.localLoc * N_HEADS * D_HEAD; i++) {
+              k[dstBase + i] = cache.keys[srcBase + i];
+              v[dstBase + i] = cache.values[srcBase + i];
+            }
+          }
+        }
+        return { k, v, seqLen: cache.localLoc };
+      }
+      function cacheExtend(cache, kNew, vNew) {
+        const batch = 2;
+        const T = TOKS_PER_FRAME;
+        if (cache.localLoc + T > CACHE_SIZE) {
+          const shift = TOKS_PER_FRAME;
+          const newLoc = cache.localLoc - shift;
+          for (let L = 0; L < N_LAYERS; L++) {
+            for (let B = 0; B < batch; B++) {
+              const base = (L * 2 + B) * CACHE_SIZE * N_HEADS * D_HEAD;
+              for (let i = 0; i < newLoc * N_HEADS * D_HEAD; i++) {
+                cache.keys[base + i] = cache.keys[base + (shift * N_HEADS * D_HEAD) + i];
+                cache.values[base + i] = cache.values[base + (shift * N_HEADS * D_HEAD) + i];
+              }
+            }
+          }
+          cache.localLoc = newLoc;
+        }
+        const elemSize = T * N_HEADS * D_HEAD;
+        for (let L = 0; L < N_LAYERS; L++) {
+          for (let B = 0; B < batch; B++) {
+            const dstBase = ((L * 2 + B) * CACHE_SIZE + cache.localLoc) * N_HEADS * D_HEAD;
+            const srcBase = ((L * 2 + B) * T) * N_HEADS * D_HEAD;
+            for (let i = 0; i < elemSize; i++) {
+              cache.keys[dstBase + i] = kNew[srcBase + i];
+              cache.values[dstBase + i] = vNew[srcBase + i];
+            }
+          }
+        }
+        cache.localLoc += T;
+      }
 
       function randn(n) {
         const out = new Float32Array(n);
@@ -93,7 +154,7 @@
         return out;
       }
 
-      async function sample(z, leftA, rightA, nSteps, cfg) {
+      async function sample(z, leftA, rightA, nSteps, cfg, cache) {
         const ts = linspace(1, 0, nSteps + 1).map(t => 3 * t / (2 * t + 1));
         let zArr = new Float32Array(z);
         const batch = 2;
@@ -101,6 +162,7 @@
         actionsBatch[0] = BigInt(leftA); actionsBatch[1] = BigInt(rightA);
         actionsBatch[2] = 0n; actionsBatch[3] = 0n;
 
+        let lastKNew = null, lastVNew = null;
         for (let i = 0; i < ts.length - 1; i++) {
           if (i > 0) await new Promise(r => setTimeout(r, 0));
           const tVal = ts[i];
@@ -114,10 +176,24 @@
           const zT = new ort.Tensor('float32', zBatch, [batch, 1, C, H, W]);
           const aT = new ort.Tensor('int64', actionsBatch, [batch, 1, 2]);
           const tT = new ort.Tensor('float32', tArr, [batch, 1]);
-          const results = await session.run({ z: zT, actions: aT, t: tT });
+
+          const feed = { z: zT, actions: aT, t: tT };
+          if (useCache && cache) {
+            const cv = cacheGet(cache);
+            if (cv) {
+              feed.cached_k = new ort.Tensor('float32', cv.k, [N_LAYERS, batch, cv.seqLen, N_HEADS, D_HEAD]);
+              feed.cached_v = new ort.Tensor('float32', cv.v, [N_LAYERS, batch, cv.seqLen, N_HEADS, D_HEAD]);
+            } else {
+              feed.cached_k = new ort.Tensor('float32', new Float32Array(0), [N_LAYERS, batch, 0, N_HEADS, D_HEAD]);
+              feed.cached_v = new ort.Tensor('float32', new Float32Array(0), [N_LAYERS, batch, 0, N_HEADS, D_HEAD]);
+            }
+          }
+          const results = await session.run(feed);
           if (zT.dispose) zT.dispose();
           if (aT.dispose) aT.dispose();
           if (tT.dispose) tT.dispose();
+          if (feed.cached_k?.dispose) feed.cached_k.dispose();
+          if (feed.cached_v?.dispose) feed.cached_v.dispose();
           let out = results.v_pred;
           if (!out && results[0]) out = results[0];
           if (!out && results instanceof Map) out = results.get('v_pred') || results.values().next().value;
@@ -131,7 +207,14 @@
           for (let j = 0; j < C * H * W; j++) {
             zArr[j] += dt * (vNeg[j] + cfg * (vCond[j] - vNeg[j]));
           }
+          if (useCache && results.k_new) {
+            lastKNew = results.k_new.data instanceof Float32Array ? results.k_new.data : new Float32Array(await results.k_new.getData());
+            lastVNew = results.v_new.data instanceof Float32Array ? results.v_new.data : new Float32Array(await results.v_new.getData());
+          }
           if (out && typeof out.dispose === 'function') out.dispose();
+        }
+        if (useCache && cache && lastKNew && lastVNew) {
+          cacheExtend(cache, lastKNew, lastVNew);
         }
         return zArr;
       }
@@ -182,6 +265,7 @@
         ctx.imageSmoothingEnabled = false;
         let z = randn(1 * C * H * W);
         let frameCount = 0;
+        const cache = useCache ? createKVCache() : null;
 
         function doOneFrame() {
           if (!running || !session) return;
@@ -192,7 +276,7 @@
           }
           frameCount++;
           const t0 = performance.now();
-          sample(z, leftAction, rightAction, steps, cfg).then(newZ => {
+          sample(z, leftAction, rightAction, steps, cfg, cache).then(newZ => {
             z = newZ;
             for (let i = 0; i < z.length; i++) z[i] = Math.max(-1, Math.min(1, z[i]));
             const frame = fixed2frame(z);
@@ -229,7 +313,7 @@
       }
 
       (async () => {
-        const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx?v=2', {
+        const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx?v=4', {
           executionProviders: providers,
           graphOptimizationLevel: 'disabled',
           enableCpuMemArena: false
@@ -238,11 +322,16 @@
           const z0 = randn(2 * C * H * W);
           const a0 = new BigInt64Array([1n, 1n, 0n, 0n]);
           const t0 = new Float32Array([0.5, 0.5]);
-          const res = await s.run({
+          const feed = {
             z: new ort.Tensor('float32', z0, [2, 1, C, H, W]),
             actions: new ort.Tensor('int64', a0, [2, 1, 2]),
             t: new ort.Tensor('float32', t0, [2, 1])
-          });
+          };
+          if (s.inputNames && s.inputNames.includes('cached_k')) {
+            feed.cached_k = new ort.Tensor('float32', new Float32Array(0), [N_LAYERS, 2, 0, N_HEADS, D_HEAD]);
+            feed.cached_v = new ort.Tensor('float32', new Float32Array(0), [N_LAYERS, 2, 0, N_HEADS, D_HEAD]);
+          }
+          const res = await s.run(feed);
           const out = res.v_pred || res[0];
           if (out?.getData) await out.getData();
         };
@@ -266,6 +355,8 @@
             }
           }
           if (!session) throw lastErr || new Error('All backends failed');
+          useCache = session.inputNames && session.inputNames.includes('cached_k');
+          if (useCache) console.log('[pong2p] KV-cache enabled');
           document.getElementById('overlay').classList.add('hidden');
           document.getElementById('startBtn').disabled = false;
           document.getElementById('stopBtn').disabled = false;
