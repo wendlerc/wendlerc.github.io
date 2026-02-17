@@ -56,7 +56,7 @@
         <p style="color:#f80;">Neural diffusion model runs in browser via ONNX Runtime Web + WebGPU.</p>
         <p style="color:#888; font-size:12px;">First frame may take 5–10s on mobile or Mac/Safari. Click Start and wait.</p>
         <p style="color:#888; font-size:12px;">Low FPS? Try Chrome or set Steps to 2.</p>
-        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a></p>
+        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a> &nbsp; WebGPU freezes? <a href="?wasm=1">?wasm=1</a></p>
       </div>
     </div>
 
@@ -192,7 +192,14 @@
           }
           frameCount++;
           const t0 = performance.now();
-          z = await sample(z, leftAction, rightAction, steps, cfg);
+          try {
+            z = await sample(z, leftAction, rightAction, steps, cfg);
+          } catch (e) {
+            console.error('[pong2p] sample error', e);
+            document.getElementById('fpsValue').textContent = 'err';
+            document.getElementById('statusText').textContent = 'Error: ' + (e?.message || e);
+            break;
+          }
           for (let i = 0; i < z.length; i++) z[i] = Math.max(-1, Math.min(1, z[i]));
           const frame = fixed2frame(z);
           const imgData = ctx.createImageData(cw, ch);
@@ -242,8 +249,8 @@
         };
         try {
           document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
-          // WebGPU first (Chrome/Edge), then WASM. Skip WebGL (error 18036544).
-          const providerOrder = [['webgpu', 'wasm'], ['wasm']];
+          const forceWasm = new URLSearchParams(location.search).get('wasm') === '1';
+          const providerOrder = forceWasm ? [['wasm']] : [['webgpu', 'wasm'], ['wasm']];
           let lastErr = null;
           for (const providers of providerOrder) {
             try {
