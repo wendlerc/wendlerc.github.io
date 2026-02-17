@@ -174,8 +174,7 @@
       async function runLoop() {
         const canvas = document.getElementById('frame');
         const ctx = canvas.getContext('2d');
-        if (!offscreen) { offscreen = document.createElement('canvas'); offscreen.width = W; offscreen.height = H; }
-        const offCtx = offscreen.getContext('2d');
+        const cw = canvas.width, ch = canvas.height;
         const steps = Math.min(10, Math.max(1, parseInt(document.getElementById('stepsInput').value) || 4));
         const cfg = parseFloat(document.getElementById('cfgInput').value) || 1.0;
 
@@ -186,9 +185,9 @@
         while (running && session) {
           await new Promise(r => setTimeout(r, 0));
           if (frameCount === 0) {
-            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, cw, ch);
             ctx.fillStyle = '#888'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText('Computing first frame…', canvas.width/2, canvas.height/2);
+            ctx.fillText('Computing first frame…', cw/2, ch/2);
             await new Promise(r => requestAnimationFrame(() => r()));
           }
           frameCount++;
@@ -196,10 +195,21 @@
           z = await sample(z, leftAction, rightAction, steps, cfg);
           for (let i = 0; i < z.length; i++) z[i] = Math.max(-1, Math.min(1, z[i]));
           const frame = fixed2frame(z);
-          const imgData = offCtx.createImageData(W, H);
-          imgData.data.set(frame);
-          offCtx.putImageData(imgData, 0, 0);
-          ctx.drawImage(offscreen, 0, 0, W, H, 0, 0, canvas.width, canvas.height);
+          const imgData = ctx.createImageData(cw, ch);
+          const scale = Math.floor(cw / W);
+          for (let dy = 0; dy < ch; dy++) {
+            for (let dx = 0; dx < cw; dx++) {
+              const sy = Math.min(Math.floor(dy / scale), H - 1);
+              const sx = Math.min(Math.floor(dx / scale), W - 1);
+              const srcIdx = (sy * W + sx) * 4;
+              const dstIdx = (dy * cw + dx) * 4;
+              imgData.data[dstIdx] = frame[srcIdx];
+              imgData.data[dstIdx + 1] = frame[srcIdx + 1];
+              imgData.data[dstIdx + 2] = frame[srcIdx + 2];
+              imgData.data[dstIdx + 3] = 255;
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
 
           await new Promise(r => requestAnimationFrame(() => r()));
           const t1 = performance.now();
