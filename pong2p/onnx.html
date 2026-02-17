@@ -102,6 +102,7 @@
         actionsBatch[2] = 0n; actionsBatch[3] = 0n;
 
         for (let i = 0; i < ts.length - 1; i++) {
+          if (i > 0) await new Promise(r => setTimeout(r, 0));
           const tVal = ts[i];
           const tArr = new Float32Array(batch);
           tArr[0] = tVal; tArr[1] = tVal;
@@ -180,8 +181,17 @@
 
         ctx.imageSmoothingEnabled = false;
         let z = randn(1 * C * H * W);
+        let frameCount = 0;
 
         while (running && session) {
+          await new Promise(r => setTimeout(r, 0));
+          if (frameCount === 0) {
+            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#888'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('Computing first frame…', canvas.width/2, canvas.height/2);
+            await new Promise(r => requestAnimationFrame(() => r()));
+          }
+          frameCount++;
           const t0 = performance.now();
           z = await sample(z, leftAction, rightAction, steps, cfg);
           for (let i = 0; i < z.length; i++) z[i] = Math.max(-1, Math.min(1, z[i]));
