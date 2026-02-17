@@ -284,7 +284,7 @@
             const scale = Math.floor(cw / W);
             for (let dy = 0; dy < ch; dy++) {
               for (let dx = 0; dx < cw; dx++) {
-                const sy = Math.min(Math.floor(dy / scale), H - 1);
+                const sy = H - 1 - Math.min(Math.floor(dy / scale), H - 1);  // flip Y
                 const sx = Math.min(Math.floor(dx / scale), W - 1);
                 const srcIdx = (sy * W + sx) * 4;
                 const dstIdx = (dy * cw + dx) * 4;
