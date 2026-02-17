@@ -56,7 +56,7 @@
         <p style="color:#f80;">Neural diffusion model runs in browser via ONNX Runtime Web + WebGPU.</p>
         <p style="color:#888; font-size:12px;">First frame may take 5–10s on mobile or Mac/Safari. Click Start and wait.</p>
         <p style="color:#888; font-size:12px;">Low FPS? Try Chrome or set Steps to 2.</p>
-        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a> &nbsp; <a href="?webgpu=1">?webgpu=1</a> (faster, may freeze)</p>
+        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a> &nbsp; <a href="?webgpu=1">?webgpu=1</a> &nbsp; <a href="?rotate=0">?rotate=0</a> (no 180° flip)</p>
       </div>
     </div>
 
@@ -221,7 +221,8 @@
 
       const params = new URLSearchParams(location.search);
       const useHWC = params.get('layout') === 'hwc';
-      const layout = params.get('layout') || 'transpose';
+      const layout = params.get('layout') || 'default';
+      const rotate180 = params.get('rotate') !== '0';  // default: 180° rotation
       function fixed2frame(zArr) {
         const out = new Uint8ClampedArray(W * H * 4);
         const clamp = v => Math.max(-1, Math.min(1, v));
@@ -284,8 +285,10 @@
             const scale = Math.floor(cw / W);
             for (let dy = 0; dy < ch; dy++) {
               for (let dx = 0; dx < cw; dx++) {
-                const sy = H - 1 - Math.min(Math.floor(dy / scale), H - 1);  // flip Y
-                const sx = Math.min(Math.floor(dx / scale), W - 1);
+                const syRaw = Math.min(Math.floor(dy / scale), H - 1);
+                const sxRaw = Math.min(Math.floor(dx / scale), W - 1);
+                const sy = rotate180 ? H - 1 - syRaw : syRaw;
+                const sx = rotate180 ? W - 1 - sxRaw : sxRaw;
                 const srcIdx = (sy * W + sx) * 4;
                 const dstIdx = (dy * cw + dx) * 4;
                 imgData.data[dstIdx] = frame[srcIdx];
