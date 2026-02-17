@@ -56,7 +56,7 @@
         <p style="color:#f80;">Neural diffusion model runs in browser via ONNX Runtime Web + WebGPU.</p>
         <p style="color:#888; font-size:12px;">First frame may take 5–10s on mobile or Mac/Safari. Click Start and wait.</p>
         <p style="color:#888; font-size:12px;">Low FPS? Try Chrome or set Steps to 2.</p>
-        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a> &nbsp; WebGPU freezes? <a href="?wasm=1">?wasm=1</a></p>
+        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a> &nbsp; <a href="?webgpu=1">?webgpu=1</a> (faster, may freeze)</p>
       </div>
     </div>
 
@@ -131,6 +131,7 @@
           for (let j = 0; j < C * H * W; j++) {
             zArr[j] += dt * (vNeg[j] + cfg * (vCond[j] - vNeg[j]));
           }
+          if (out && typeof out.dispose === 'function') out.dispose();
         }
         return zArr;
       }
@@ -219,6 +220,7 @@
           ctx.putImageData(imgData, 0, 0);
 
           await new Promise(r => requestAnimationFrame(() => r()));
+          await new Promise(r => setTimeout(r, 50));
           const t1 = performance.now();
           frameTimes.push(t1 - t0);
           if (frameTimes.length > 30) frameTimes.shift();
@@ -249,8 +251,9 @@
         };
         try {
           document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
-          const forceWasm = new URLSearchParams(location.search).get('wasm') === '1';
-          const providerOrder = forceWasm ? [['wasm']] : [['webgpu', 'wasm'], ['wasm']];
+          const params = new URLSearchParams(location.search);
+          const useWebGPU = params.get('webgpu') === '1';
+          const providerOrder = useWebGPU ? [['webgpu', 'wasm'], ['wasm']] : [['wasm']];
           let lastErr = null;
           for (const providers of providerOrder) {
             try {
