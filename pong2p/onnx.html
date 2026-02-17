@@ -31,7 +31,7 @@
       </div>
     </div>
 
-    <div id="app">
+    <div id="app" tabindex="0" style="outline:none;">
       <h1>Pong 2-Player <span style="color:#f80; font-size:14px;">(ONNX / WebGPU)</span></h1>
       <p style="color:#888;">Neural diffusion model runs in your browser. Fully standalone.</p>
       <div style="margin-bottom: 12px;">
@@ -42,7 +42,7 @@
         <button id="startBtn" disabled>Start</button>
         <button id="stopBtn" disabled>Stop</button>
       </div>
-      <div id="canvasContainer">
+      <div id="canvasContainer" tabindex="0" style="outline:none; cursor:pointer;" title="Click to enable keyboard">
         <canvas id="frame" width="240" height="240"></canvas>
       </div>
       <div style="margin-top:12px; font-family:monospace;">
@@ -52,8 +52,10 @@
       <div class="controls-box">
         <h3>Controls</h3>
         <p><b>Left (W/S):</b> up/down &nbsp; <b>Right (↑/↓):</b> up/down</p>
+        <p style="color:#888; font-size:12px;">Click canvas to enable keyboard (needed on Mac/Firefox).</p>
         <p style="color:#f80;">Neural diffusion model runs in browser via ONNX Runtime Web + WebGPU.</p>
-        <p style="color:#888; font-size:12px;">First frame may take 5–10s on mobile. Tap Start and wait.</p>
+        <p style="color:#888; font-size:12px;">First frame may take 5–10s on mobile or Mac/Safari. Click Start and wait.</p>
+        <p style="color:#888; font-size:12px;">Low FPS? Try Chrome or set Steps to 2.</p>
         <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug (if errors)</a></p>
       </div>
     </div>
@@ -134,13 +136,18 @@
 
       function fixed2frame(zArr) {
         const out = new Uint8ClampedArray(W * H * 4);
-        for (let i = 0; i < W * H * C; i += 3) {
-          const clamp = v => Math.max(-1, Math.min(1, v));
-          const r = Math.max(0, Math.min(255, Math.round((clamp(zArr[i]) * 0.5 + 0.5) * 255)));
-          const g = Math.max(0, Math.min(255, Math.round((clamp(zArr[i + 1]) * 0.5 + 0.5) * 255)));
-          const b = Math.max(0, Math.min(255, Math.round((clamp(zArr[i + 2]) * 0.5 + 0.5) * 255)));
-          const idx = (i / 3) * 4;
-          out[idx] = r; out[idx + 1] = g; out[idx + 2] = b; out[idx + 3] = 255;
+        const clamp = v => Math.max(-1, Math.min(1, v));
+        const toByte = v => Math.max(0, Math.min(255, Math.round((clamp(v) * 0.5 + 0.5) * 255)));
+        const stride = W * H;
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const p = y * W + x;
+            const r = toByte(zArr[0 * stride + p]);
+            const g = toByte(zArr[1 * stride + p]);
+            const b = toByte(zArr[2 * stride + p]);
+            const idx = p * 4;
+            out[idx] = r; out[idx + 1] = g; out[idx + 2] = b; out[idx + 3] = 255;
+          }
         }
         return out;
       }
@@ -227,9 +234,12 @@
         if (!session || running) return;
         running = true;
         document.getElementById('startBtn').disabled = true;
+        document.getElementById('startBtn').textContent = 'Starting…';
         document.getElementById('stopBtn').disabled = false;
         document.getElementById('fpsValue').textContent = '…';
+        document.getElementById('canvasContainer').focus();
         runLoop().catch(e => {
+          document.getElementById('startBtn').textContent = 'Start';
           document.getElementById('statusText').textContent = 'Error: ' + (e?.message || e);
           console.error('[pong2p] runLoop', e);
           running = false;
@@ -240,12 +250,18 @@
       function onStop() {
         running = false;
         document.getElementById('startBtn').disabled = false;
+        document.getElementById('startBtn').textContent = 'Start';
         document.getElementById('stopBtn').disabled = true;
       }
+      function handlePointer(e) { e.preventDefault(); onStart(); }
+      function handleStopPointer(e) { e.preventDefault(); onStop(); }
       document.getElementById('startBtn').addEventListener('click', onStart);
-      document.getElementById('startBtn').addEventListener('touchend', (e) => { e.preventDefault(); onStart(); });
+      document.getElementById('startBtn').addEventListener('touchend', handlePointer, { passive: false });
+      document.getElementById('startBtn').addEventListener('pointerup', handlePointer);
       document.getElementById('stopBtn').addEventListener('click', onStop);
-      document.getElementById('stopBtn').addEventListener('touchend', (e) => { e.preventDefault(); onStop(); });
+      document.getElementById('stopBtn').addEventListener('touchend', handleStopPointer, { passive: false });
+      document.getElementById('stopBtn').addEventListener('pointerup', handleStopPointer);
+      document.getElementById('canvasContainer').addEventListener('click', () => document.getElementById('canvasContainer').focus());
 
       document.addEventListener('keydown', (e) => {
         if (e.key === 'w' || e.key === 'W') leftAction = 2;
