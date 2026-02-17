@@ -35,7 +35,7 @@
       <h1>Pong 2-Player <span style="color:#f80; font-size:14px;">(ONNX / WebGPU)</span></h1>
       <p style="color:#888;">Neural diffusion model runs in your browser. Fully standalone.</p>
       <div style="margin-bottom: 12px;">
-        <label>Steps: <input type="number" id="stepsInput" value="4" min="1" max="10" style="width:50px;" /></label>
+        <label>Steps: <input type="number" id="stepsInput" value="8" min="1" max="10" style="width:50px;" /></label>
         <label style="margin-left:12px;">CFG: <input type="number" id="cfgInput" value="1.0" min="0" max="5" step="0.1" style="width:50px;" /></label>
       </div>
       <div>
@@ -56,7 +56,7 @@
         <p style="color:#f80;">Neural diffusion model runs in browser via ONNX Runtime Web + WebGPU.</p>
         <p style="color:#888; font-size:12px;">First frame may take 5–10s on mobile or Mac/Safari. Click Start and wait.</p>
         <p style="color:#888; font-size:12px;">Low FPS? Try Chrome or set Steps to 2.</p>
-        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug (if errors)</a></p>
+        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a> &nbsp; Try <a href="?layout=hwc">?layout=hwc</a> or <a href="?layout=transpose">?layout=transpose</a> if display wrong</p>
       </div>
     </div>
 
@@ -134,19 +134,30 @@
         return zArr;
       }
 
+      const params = new URLSearchParams(location.search);
+      const useHWC = params.get('layout') === 'hwc';
+      const useTranspose = params.get('layout') === 'transpose';
       function fixed2frame(zArr) {
         const out = new Uint8ClampedArray(W * H * 4);
         const clamp = v => Math.max(-1, Math.min(1, v));
         const toByte = v => Math.max(0, Math.min(255, Math.round((clamp(v) * 0.5 + 0.5) * 255)));
         const stride = W * H;
-        for (let y = 0; y < H; y++) {
-          for (let x = 0; x < W; x++) {
-            const p = y * W + x;
-            const r = toByte(zArr[0 * stride + p]);
-            const g = toByte(zArr[1 * stride + p]);
-            const b = toByte(zArr[2 * stride + p]);
-            const idx = p * 4;
+        if (useHWC) {
+          for (let i = 0; i < W * H * C; i += 3) {
+            const r = toByte(zArr[i]), g = toByte(zArr[i + 1]), b = toByte(zArr[i + 2]);
+            const idx = (i / 3) * 4;
             out[idx] = r; out[idx + 1] = g; out[idx + 2] = b; out[idx + 3] = 255;
+          }
+        } else {
+          for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+              const p = useTranspose ? (x * H + y) : (y * W + x);
+              const r = toByte(zArr[0 * stride + p]);
+              const g = toByte(zArr[1 * stride + p]);
+              const b = toByte(zArr[2 * stride + p]);
+              const idx = (y * W + x) * 4;
+              out[idx] = r; out[idx + 1] = g; out[idx + 2] = b; out[idx + 3] = 255;
+            }
           }
         }
         return out;
@@ -166,6 +177,7 @@
         while (running && session) {
           const t0 = performance.now();
           z = await sample(z, leftAction, rightAction, steps, cfg);
+          for (let i = 0; i < z.length; i++) z[i] = Math.max(-1, Math.min(1, z[i]));
           const frame = fixed2frame(z);
           const imgData = offCtx.createImageData(W, H);
           imgData.data.set(frame);
