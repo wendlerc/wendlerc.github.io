@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <title>Pong 2-Player (ONNX Client-Side)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- ort.min.js = WASM only. 1.20+ fixes Lt[m] undefined kernel in 1.18 -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/ort.min.js"></script>
+    <!-- ort.all.min.js = WebGPU + WASM. Try GPU first for speed, fallback to WASM -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/ort.all.min.js"></script>
     <style>
       html, body { margin:0; min-height:100%; background:#111; color:#eee; font-family: system-ui, sans-serif; }
       #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); z-index: 9999; }
@@ -194,8 +194,8 @@
         };
         try {
           document.getElementById('statusText').textContent = 'Loading model (~85MB)...';
-          // WASM-only build: avoids WebGL/WebGPU error 18036544 entirely
-          const providerOrder = [['wasm']];
+          // WebGPU first (Chrome/Edge), then WASM. Skip WebGL (error 18036544).
+          const providerOrder = [['webgpu', 'wasm'], ['wasm']];
           let lastErr = null;
           for (const providers of providerOrder) {
             try {

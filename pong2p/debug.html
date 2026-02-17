@@ -10,7 +10,7 @@
     .ok { color: #0f8; }
     button { padding: 8px 12px; margin: 4px; cursor: pointer; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/ort.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/ort.all.min.js"></script>
 </head>
 <body>
   <h1>Pong2P ONNX Debug</h1>
@@ -52,9 +52,9 @@
         log('wasmPaths set');
       }
       try {
-        log('Creating session (wasm only)...');
+        log('Creating session (webgpu+wasm, then wasm)...');
         const session = await ort.InferenceSession.create('./pong2p.onnx', {
-          executionProviders: ['wasm'],
+          executionProviders: ['webgpu', 'wasm'],
           graphOptimizationLevel: 'disabled',
           enableCpuMemArena: false
         });
