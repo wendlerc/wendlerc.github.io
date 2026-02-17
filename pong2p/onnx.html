@@ -172,7 +172,7 @@
         return out;
       }
 
-      async function runLoop() {
+      function runLoop() {
         const canvas = document.getElementById('frame');
         const ctx = canvas.getContext('2d');
         const cw = canvas.width, ch = canvas.height;
@@ -183,52 +183,49 @@
         let z = randn(1 * C * H * W);
         let frameCount = 0;
 
-        while (running && session) {
-          await new Promise(r => setTimeout(r, 0));
+        function doOneFrame() {
+          if (!running || !session) return;
           if (frameCount === 0) {
             ctx.fillStyle = '#222'; ctx.fillRect(0, 0, cw, ch);
             ctx.fillStyle = '#888'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
             ctx.fillText('Computing first frame…', cw/2, ch/2);
-            await new Promise(r => requestAnimationFrame(() => r()));
           }
           frameCount++;
           const t0 = performance.now();
-          try {
-            z = await sample(z, leftAction, rightAction, steps, cfg);
-          } catch (e) {
+          sample(z, leftAction, rightAction, steps, cfg).then(newZ => {
+            z = newZ;
+            for (let i = 0; i < z.length; i++) z[i] = Math.max(-1, Math.min(1, z[i]));
+            const frame = fixed2frame(z);
+            const imgData = ctx.createImageData(cw, ch);
+            const scale = Math.floor(cw / W);
+            for (let dy = 0; dy < ch; dy++) {
+              for (let dx = 0; dx < cw; dx++) {
+                const sy = Math.min(Math.floor(dy / scale), H - 1);
+                const sx = Math.min(Math.floor(dx / scale), W - 1);
+                const srcIdx = (sy * W + sx) * 4;
+                const dstIdx = (dy * cw + dx) * 4;
+                imgData.data[dstIdx] = frame[srcIdx];
+                imgData.data[dstIdx + 1] = frame[srcIdx + 1];
+                imgData.data[dstIdx + 2] = frame[srcIdx + 2];
+                imgData.data[dstIdx + 3] = 255;
+              }
+            }
+            ctx.putImageData(imgData, 0, 0);
+            const t1 = performance.now();
+            frameTimes.push(t1 - t0);
+            if (frameTimes.length > 30) frameTimes.shift();
+            const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+            document.getElementById('fpsValue').textContent = (1000 / avg).toFixed(1);
+            document.getElementById('leftValue').textContent = actionLabels[leftAction] || leftAction;
+            document.getElementById('rightValue').textContent = actionLabels[rightAction] || rightAction;
+            setTimeout(doOneFrame, 100);
+          }).catch(e => {
             console.error('[pong2p] sample error', e);
             document.getElementById('fpsValue').textContent = 'err';
             document.getElementById('statusText').textContent = 'Error: ' + (e?.message || e);
-            break;
-          }
-          for (let i = 0; i < z.length; i++) z[i] = Math.max(-1, Math.min(1, z[i]));
-          const frame = fixed2frame(z);
-          const imgData = ctx.createImageData(cw, ch);
-          const scale = Math.floor(cw / W);
-          for (let dy = 0; dy < ch; dy++) {
-            for (let dx = 0; dx < cw; dx++) {
-              const sy = Math.min(Math.floor(dy / scale), H - 1);
-              const sx = Math.min(Math.floor(dx / scale), W - 1);
-              const srcIdx = (sy * W + sx) * 4;
-              const dstIdx = (dy * cw + dx) * 4;
-              imgData.data[dstIdx] = frame[srcIdx];
-              imgData.data[dstIdx + 1] = frame[srcIdx + 1];
-              imgData.data[dstIdx + 2] = frame[srcIdx + 2];
-              imgData.data[dstIdx + 3] = 255;
-            }
-          }
-          ctx.putImageData(imgData, 0, 0);
-
-          await new Promise(r => requestAnimationFrame(() => r()));
-          await new Promise(r => setTimeout(r, 50));
-          const t1 = performance.now();
-          frameTimes.push(t1 - t0);
-          if (frameTimes.length > 30) frameTimes.shift();
-          const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
-          document.getElementById('fpsValue').textContent = (1000 / avg).toFixed(1);
-          document.getElementById('leftValue').textContent = actionLabels[leftAction] || leftAction;
-          document.getElementById('rightValue').textContent = actionLabels[rightAction] || rightAction;
+          });
         }
+        doOneFrame();
       }
 
       (async () => {
