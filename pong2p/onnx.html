@@ -14,7 +14,7 @@
       @keyframes spin { to { transform: rotate(360deg); } }
       #statusText { margin-top: 12px; color: #aaa; text-align: center; font-size: 14px; }
       #app { padding: 16px; }
-      button { padding: 8px 12px; background:#09f; color:#fff; border:none; border-radius:8px; cursor:pointer; }
+      button { padding: 12px 20px; min-height: 44px; background:#09f; color:#fff; border:none; border-radius:8px; cursor:pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
       button:disabled { opacity: .5; cursor: not-allowed; }
       #canvasContainer { margin: 12px 0; background:#222; display: inline-block; }
       canvas#frame { image-rendering: pixelated; display: block; }
@@ -53,6 +53,7 @@
         <h3>Controls</h3>
         <p><b>Left (W/S):</b> up/down &nbsp; <b>Right (↑/↓):</b> up/down</p>
         <p style="color:#f80;">Neural diffusion model runs in browser via ONNX Runtime Web + WebGPU.</p>
+        <p style="color:#888; font-size:12px;">First frame may take 5–10s on mobile. Tap Start and wait.</p>
         <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug (if errors)</a></p>
       </div>
     </div>
@@ -222,17 +223,29 @@
         }
       })();
 
-      document.getElementById('startBtn').addEventListener('click', () => {
+      function onStart() {
+        if (!session) return;
         running = true;
         document.getElementById('startBtn').disabled = true;
         document.getElementById('stopBtn').disabled = false;
-        runLoop();
-      });
-      document.getElementById('stopBtn').addEventListener('click', () => {
+        document.getElementById('fpsValue').textContent = '…';
+        runLoop().catch(e => {
+          document.getElementById('statusText').textContent = 'Error: ' + (e?.message || e);
+          console.error('[pong2p] runLoop', e);
+          running = false;
+          document.getElementById('startBtn').disabled = false;
+          document.getElementById('stopBtn').disabled = true;
+        });
+      }
+      function onStop() {
         running = false;
         document.getElementById('startBtn').disabled = false;
         document.getElementById('stopBtn').disabled = true;
-      });
+      }
+      document.getElementById('startBtn').addEventListener('click', onStart);
+      document.getElementById('startBtn').addEventListener('touchend', (e) => { e.preventDefault(); onStart(); });
+      document.getElementById('stopBtn').addEventListener('click', onStop);
+      document.getElementById('stopBtn').addEventListener('touchend', (e) => { e.preventDefault(); onStop(); });
 
       document.addEventListener('keydown', (e) => {
         if (e.key === 'w' || e.key === 'W') leftAction = 2;
