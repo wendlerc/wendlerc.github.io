@@ -68,8 +68,8 @@
         }
       }
       const W = 24; const H = 24; const C = 3;
-      // KV-cache constants (match pong2p_onnx config)
-      const N_LAYERS = 8, N_HEADS = 20, D_HEAD = 16, TOKS_PER_FRAME = 65, N_WINDOW = 30;
+      // KV-cache constants (flowing-sun-814: d_model=384, n_heads=16, d_head=24)
+      const N_LAYERS = 8, N_HEADS = 16, D_HEAD = 24, TOKS_PER_FRAME = 65, N_WINDOW = 30;
       const CACHE_SIZE = TOKS_PER_FRAME * (N_WINDOW - 1);
 
       let session = null;
@@ -313,7 +313,7 @@
       }
 
       (async () => {
-        const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx?v=4', {
+        const loadSession = (providers) => ort.InferenceSession.create('./pong2p.onnx?v=5', {
           executionProviders: providers,
           graphOptimizationLevel: 'disabled',
           enableCpuMemArena: false
