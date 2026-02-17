@@ -224,7 +224,7 @@
       })();
 
       function onStart() {
-        if (!session) return;
+        if (!session || running) return;
         running = true;
         document.getElementById('startBtn').disabled = true;
         document.getElementById('stopBtn').disabled = false;
