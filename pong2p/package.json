@@ -1,0 +1,12 @@
+{
+  "name": "pong2p-debug",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "debug": "node debug-browser.mjs",
+    "debug:local": "node debug-browser.mjs http://localhost:8000/onnx.html"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}
