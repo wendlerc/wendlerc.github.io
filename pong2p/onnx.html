@@ -56,7 +56,7 @@
         <p style="color:#f80;">Neural diffusion model runs in browser via ONNX Runtime Web + WebGPU.</p>
         <p style="color:#888; font-size:12px;">First frame may take 5–10s on mobile or Mac/Safari. Click Start and wait.</p>
         <p style="color:#888; font-size:12px;">Low FPS? Try Chrome or set Steps to 2.</p>
-        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a> &nbsp; Try <a href="?layout=hwc">?layout=hwc</a> or <a href="?layout=transpose">?layout=transpose</a> if display wrong</p>
+        <p style="margin-top:8px;"><a href="client.html" style="color:#0f8;">Classic Pong</a> &nbsp; <a href="debug.html" style="color:#f80;">Debug</a></p>
       </div>
     </div>
 
@@ -136,7 +136,7 @@
 
       const params = new URLSearchParams(location.search);
       const useHWC = params.get('layout') === 'hwc';
-      const useTranspose = params.get('layout') === 'transpose';
+      const layout = params.get('layout') || 'transpose';
       function fixed2frame(zArr) {
         const out = new Uint8ClampedArray(W * H * 4);
         const clamp = v => Math.max(-1, Math.min(1, v));
@@ -151,7 +151,14 @@
         } else {
           for (let y = 0; y < H; y++) {
             for (let x = 0; x < W; x++) {
-              const p = useTranspose ? (x * H + y) : (y * W + x);
+              let p;
+              if (layout === 'transpose') {
+                p = y * W + (W - 1 - x);
+              } else if (layout === 'transpose_old') {
+                p = x * H + y;
+              } else {
+                p = y * W + x;
+              }
               const r = toByte(zArr[0 * stride + p]);
               const g = toByte(zArr[1 * stride + p]);
               const b = toByte(zArr[2 * stride + p]);
@@ -184,6 +191,7 @@
           offCtx.putImageData(imgData, 0, 0);
           ctx.drawImage(offscreen, 0, 0, W, H, 0, 0, canvas.width, canvas.height);
 
+          await new Promise(r => requestAnimationFrame(() => r()));
           const t1 = performance.now();
           frameTimes.push(t1 - t0);
           if (frameTimes.length > 30) frameTimes.shift();
