@@ -111,13 +111,13 @@
           zBatch.set(zArr, 0);
           zBatch.set(zArr, 1 * C * H * W);
 
-          const feeds = {
-            z: new ort.Tensor('float32', zBatch, [batch, 1, C, H, W]),
-            actions: new ort.Tensor('int64', actionsBatch, [batch, 1, 2]),
-            t: new ort.Tensor('float32', tArr, [batch, 1])
-          };
-
-          const results = await session.run(feeds);
+          const zT = new ort.Tensor('float32', zBatch, [batch, 1, C, H, W]);
+          const aT = new ort.Tensor('int64', actionsBatch, [batch, 1, 2]);
+          const tT = new ort.Tensor('float32', tArr, [batch, 1]);
+          const results = await session.run({ z: zT, actions: aT, t: tT });
+          if (zT.dispose) zT.dispose();
+          if (aT.dispose) aT.dispose();
+          if (tT.dispose) tT.dispose();
           let out = results.v_pred;
           if (!out && results[0]) out = results[0];
           if (!out && results instanceof Map) out = results.get('v_pred') || results.values().next().value;

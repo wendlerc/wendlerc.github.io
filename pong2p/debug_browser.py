@@ -67,8 +67,13 @@ async def main():
             fps_el = await page.query_selector("#fpsValue")
             fps_text = await fps_el.text_content() if fps_el else "?"
             elapsed = (time.monotonic() - start) * 1000
-            fps_history.append({"t_ms": int(elapsed), "fps": fps_text})
-            log(f"  {elapsed/1000:.1f}s: FPS={fps_text}")
+            mem = await page.evaluate("""() => {
+                if (performance.memory) return {used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize, limit: performance.memory.jsHeapSizeLimit};
+                return null;
+            }""")
+            mem_mb = f", mem={mem['used']/1e6:.1f}MB" if mem else ""
+            fps_history.append({"t_ms": int(elapsed), "fps": fps_text, "mem_mb": mem["used"]/1e6 if mem else None})
+            log(f"  {elapsed/1000:.1f}s: FPS={fps_text}{mem_mb}")
             if fps_text == "err":
                 log("FPS shows err - stopping")
                 break
