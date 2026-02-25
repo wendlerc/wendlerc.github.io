@@ -217,7 +217,13 @@ def strip_comments(text):
             out.append(text[i : i + 2])
             i += 2
         elif text[i] == "%":
+            # Check if the comment starts at the beginning of a line
+            at_line_start = (i == 0 or out and out[-1] == "\n")
             while i < len(text) and text[i] != "\n":
+                i += 1
+            # If the entire line was a comment, also consume the newline
+            # to avoid creating spurious blank lines / paragraph breaks
+            if at_line_start and i < len(text) and text[i] == "\n":
                 i += 1
         else:
             out.append(text[i])
