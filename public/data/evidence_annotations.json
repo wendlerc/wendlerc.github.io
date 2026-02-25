@@ -59,7 +59,7 @@
   },
   {
     "id": "CS4-E-looping",
-    "find_text": "agents exchanged messages for approximately one hour on Feb 8",
+    "find_text": "agents exchanged messages for approximately one hour on Feb 8 before autonomously stopping",
     "links": [{"type": "discord_channel", "id": "ch-1470034993635131514", "label": "#looping (Feb 8)"}]
   },
   {
