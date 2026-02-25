@@ -24,7 +24,7 @@
 /* Offset anchor targets below fixed topbar (46px + breathing room) */
 [id] { scroll-margin-top: 60px; }
 
-html { font-size: 18px; -webkit-text-size-adjust: 100%; }
+html { font-size: 18px; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
 
 body {
   font-family: var(--font-body);
@@ -586,11 +586,19 @@ sup.footnote-ref a:hover {
 /* ── Mobile ────────────────────────────────────────────────── */
 @media screen and (max-width: 640px) {
   html { font-size: 16px; }
-  body { padding: 1em 1em 3em; }
+  body { padding: 1em 0.8em 3em; }
   h1 { font-size: 1.7em; }
-  h2 { font-size: 1.3em; }
+  h2 { font-size: 1.3em; word-break: break-word; }
+  h3 { word-break: break-word; }
   .cs-row { flex-direction: column; gap: 0.2em; }
   .spk-name { min-width: auto; }
+  .spk-line, .spk-thinking { flex-direction: column; gap: 0.2em; }
+  .transcript { overflow-x: auto; }
+  table { display: block; overflow-x: auto; }
+  .cs-timeline { overflow-x: auto; }
+  pre { max-width: 100%; }
+  .topbar { padding: 0 12px; }
+  .topbar-links a { font-size: .68rem; padding: 4px 6px; }
 }
 
 /* ── Shared navigation topbar ─────────────────────────────── */
@@ -618,3 +626,4 @@ sup.footnote-ref a:hover {
 }
 .topbar-links a:hover { color: #fff; background: rgba(255,255,255,.12); border-bottom: none; }
 .topbar-links a.current { color: #fff; background: rgba(255,255,255,.18); border-bottom: none; }
+.topbar-links a.topbar-home { color: rgba(255,255,255,.85); margin-right: 8px; padding-right: 14px; border-right: 1px solid rgba(255,255,255,.2); }

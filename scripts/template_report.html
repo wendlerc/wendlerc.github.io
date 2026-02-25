@@ -10,73 +10,28 @@
 <!-- INLINE_DATA -->
   <link rel="stylesheet" href="style.css">
   <style>
-    /* Topbar + sidebar adjustment for report.html */
-    #topbar-nav {
-      position: fixed; top: 0; left: 0; right: 0;
-      background: #4a1e1e; color: #fff;
-      padding: 0 24px;
-      display: flex; align-items: center; justify-content: space-between;
-      height: 46px; z-index: 200;
-      border-bottom: 2px solid #3a1414;
-    }
-    #topbar-nav .tb-title {
-      font-family: 'EB Garamond', Georgia, serif;
-      font-size: .95rem; font-weight: 600;
-      letter-spacing: .03em; white-space: nowrap;
-      color: #fff;
-    }
-    #topbar-nav .tb-links { display: flex; gap: 4px; }
-    #topbar-nav .tb-links a {
-      color: rgba(255,255,255,.6);
-      text-decoration: none; border-bottom: none;
-      font-size: .75rem; font-weight: 500;
-      padding: 4px 10px; border-radius: 4px;
-      transition: color .15s, background .15s;
-    }
-    #topbar-nav .tb-links a:hover { color: #fff; background: rgba(255,255,255,.12); border-bottom: none; }
-    #topbar-nav .tb-links a.current { color: #fff; background: rgba(255,255,255,.18); border-bottom: none; }
+    /* Report needs fixed topbar for long-scroll paper */
+    .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 200; }
     @media screen and (min-width: 1200px) {
       #sidebar-toc  { top: 46px !important; height: calc(100vh - 46px) !important; }
       #sidebar-search { top: 46px !important; height: calc(100vh - 46px) !important; }
     }
-    body { padding-top: 46px !important; }
-
-    /* Citation / Footnote Tooltip */
-    #cite-tip {
-      position: fixed; z-index: 10000;
-      max-width: 420px; min-width: 240px;
-      padding: 12px 16px;
-      background: #fffff8;
-      border: 1px solid #c8b88a;
-      border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(107,44,44,.2);
-      font-family: 'EB Garamond', Georgia, serif;
-      font-size: .86em; line-height: 1.5;
-      opacity: 0; pointer-events: none;
-      transition: opacity .15s;
+    @media screen and (max-width: 640px) {
+      .topbar { padding: 0 12px; }
+      .topbar-links a { font-size: .68rem; padding: 4px 6px; }
     }
-    #cite-tip.visible { opacity: 1; pointer-events: auto; }
-    #cite-tip.ct-citation { border-left: 3px solid #c2611a; }
-    #cite-tip.ct-footnote { border-left: 3px solid #c8a84b; }
-    #cite-tip .ct-num { color: #c2611a; font-weight: 700; }
-    #cite-tip.ct-footnote .ct-num { color: #8a6d2b; }
-    #cite-tip .ct-authors { display: block; color: #2c1810; margin-top: 1px; }
-    #cite-tip .ct-title { display: block; margin-top: 3px; font-style: italic; color: #1a1a1a; }
-    #cite-tip .ct-venue { display: block; font-size: .9em; color: #7a6a5a; margin-top: 2px; }
-    #cite-tip .ct-url { display: block; font-size: .85em; margin-top: 4px; }
-    #cite-tip .ct-url a { color: #c2611a; text-decoration: underline; text-underline-offset: 2px; }
-    #cite-tip .ct-url a:hover { color: #a04f10; }
-    #cite-tip .ct-fn-body { color: #333; margin-top: 2px; }
-    #cite-tip .ct-fn-body a { color: #6b2c2c; }
+    body { padding-top: 46px !important; }
   </style>
 </head>
 <body>
-<div id="topbar-nav">
-  <div class="tb-title">Agents of Chaos</div>
-  <div class="tb-links">
+<div class="topbar">
+  <div class="topbar-title">Agents of Chaos</div>
+  <div class="topbar-links">
+    <a href="index.html" class="topbar-home">Landing Page</a>
     <a href="report.html" class="current">Report</a>
-    <a href="index.html">Landing Page</a>
     <a href="logs.html">Discord</a>
+    <a href="sessions.html">Sessions</a>
+    <a href="dashboard.html">Dashboard</a>
   </div>
 </div>
 <nav id="sidebar-toc" aria-label="Table of contents">
@@ -86,7 +41,10 @@
 <aside id="sidebar-search" aria-label="Search">
   <div class="sidebar-title">Search</div>
   <input type="text" id="search-input" placeholder="Search the paper...">
-  <div id="search-results"></div>
+  <div id="search-results" style="flex:1"></div>
+  <div style="padding:14px 0 4px;border-top:1px solid var(--border,#c8bfa8);font-size:.7rem;color:var(--muted,#7a6a5a);flex-shrink:0">
+    Created with <a href="https://claude.ai/code" style="color:inherit;text-decoration:underline">Claude Code</a>
+  </div>
 </aside>
 <main id="guide-content">
 
@@ -150,8 +108,6 @@ David Bau<sup>1</sup>
 </p>
 <p class="paper-links">
   <a href="logs.html">📜 Browse Interaction Logs</a>
-  <a href="sessions.html">🤖 OpenClaw Sessions</a>
-  <a href="suggestions.html">✏️ Edit Suggestions</a>
 </p>
 <hr>
 
@@ -172,7 +128,7 @@ David Bau<sup>1</sup>
     li.className = h.tagName === 'H2' ? 'toc-part' : 'toc-chapter';
     const a = document.createElement('a');
     a.href = '#' + (h.id || '');
-    a.textContent = h.textContent.replace(/\\[\\d+\\]/g, '').trim();
+    a.textContent = h.textContent.replace(/\[\d+\]/g, '').trim();
     li.appendChild(a);
     toc.appendChild(li);
   });
@@ -251,7 +207,7 @@ David Bau<sup>1</sup>
     results.innerHTML = '';
     if (q.length < 2) return;
 
-    const re = new RegExp(q.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'gi');
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
     highlight(content, re);
 
     // One result per section — keyed by preceding heading id
@@ -386,6 +342,9 @@ David Bau<sup>1</sup>
   border: 1px solid transparent;
   transition: opacity .15s;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cs-src-link:hover { opacity: .75; }
 .cs-src-discord {
@@ -577,6 +536,40 @@ David Bau<sup>1</sup>
     const turn   = a.getAttribute('data-turn');
     const fakeLnk = { type: 'session', id: sessId, label: a.textContent.trim(), turn: turn ? `turn-${turn}` : null };
     attachHover(a, fakeLnk);
+  });
+
+
+  // Auto-label [ref] links with figure numbers / section names
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    if (a.textContent.trim() !== '[ref]') return;
+    const id = a.getAttribute('href').slice(1);
+    const target = document.getElementById(id);
+    if (!target) return;
+    if (id.startsWith('fig:')) {
+      const figNum = target.querySelector('.fig-num');
+      if (figNum) {
+        const m = figNum.textContent.match(/\d+/);
+        if (m) { a.textContent = 'Figure\u00a0' + m[0]; }
+      }
+    } else if (id.startsWith('sec:')) {
+      let heading = /^H[1-6]$/.test(target.tagName) ? target
+                  : target.closest('h1,h2,h3,h4,h5,h6')
+                  || target.querySelector('h1,h2,h3,h4,h5,h6');
+      if (!heading) {
+        let sib = target.previousElementSibling;
+        while (sib && !/^H[1-6]$/.test(sib.tagName)) sib = sib.previousElementSibling;
+        heading = sib;
+      }
+      if (!heading) {
+        let sib = target.nextElementSibling;
+        while (sib && !/^H[1-6]$/.test(sib.tagName)) sib = sib.nextElementSibling;
+        heading = sib;
+      }
+      if (heading) {
+        const txt = heading.textContent.trim();
+        a.textContent = txt.length > 35 ? txt.slice(0, 33) + '\u2026' : txt;
+      }
+    }
   });
 })();
 </script>
