@@ -1,2 +1,5 @@
 pong2p/debug-output/
 pong2p/node_modules/
+__pycache__/
+*.pyc
+paper/
