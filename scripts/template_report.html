@@ -9,8 +9,76 @@
   <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Source+Code+Pro:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <!-- INLINE_DATA -->
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Topbar + sidebar adjustment for report.html */
+    #topbar-nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: #4a1e1e; color: #fff;
+      padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 46px; z-index: 200;
+      border-bottom: 2px solid #3a1414;
+    }
+    #topbar-nav .tb-title {
+      font-family: 'EB Garamond', Georgia, serif;
+      font-size: .95rem; font-weight: 600;
+      letter-spacing: .03em; white-space: nowrap;
+      color: #fff;
+    }
+    #topbar-nav .tb-links { display: flex; gap: 4px; }
+    #topbar-nav .tb-links a {
+      color: rgba(255,255,255,.6);
+      text-decoration: none; border-bottom: none;
+      font-size: .75rem; font-weight: 500;
+      padding: 4px 10px; border-radius: 4px;
+      transition: color .15s, background .15s;
+    }
+    #topbar-nav .tb-links a:hover { color: #fff; background: rgba(255,255,255,.12); border-bottom: none; }
+    #topbar-nav .tb-links a.current { color: #fff; background: rgba(255,255,255,.18); border-bottom: none; }
+    @media screen and (min-width: 1200px) {
+      #sidebar-toc  { top: 46px !important; height: calc(100vh - 46px) !important; }
+      #sidebar-search { top: 46px !important; height: calc(100vh - 46px) !important; }
+    }
+    body { padding-top: 46px !important; }
+
+    /* Citation / Footnote Tooltip */
+    #cite-tip {
+      position: fixed; z-index: 10000;
+      max-width: 420px; min-width: 240px;
+      padding: 12px 16px;
+      background: #fffff8;
+      border: 1px solid #c8b88a;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(107,44,44,.2);
+      font-family: 'EB Garamond', Georgia, serif;
+      font-size: .86em; line-height: 1.5;
+      opacity: 0; pointer-events: none;
+      transition: opacity .15s;
+    }
+    #cite-tip.visible { opacity: 1; pointer-events: auto; }
+    #cite-tip.ct-citation { border-left: 3px solid #c2611a; }
+    #cite-tip.ct-footnote { border-left: 3px solid #c8a84b; }
+    #cite-tip .ct-num { color: #c2611a; font-weight: 700; }
+    #cite-tip.ct-footnote .ct-num { color: #8a6d2b; }
+    #cite-tip .ct-authors { display: block; color: #2c1810; margin-top: 1px; }
+    #cite-tip .ct-title { display: block; margin-top: 3px; font-style: italic; color: #1a1a1a; }
+    #cite-tip .ct-venue { display: block; font-size: .9em; color: #7a6a5a; margin-top: 2px; }
+    #cite-tip .ct-url { display: block; font-size: .85em; margin-top: 4px; }
+    #cite-tip .ct-url a { color: #c2611a; text-decoration: underline; text-underline-offset: 2px; }
+    #cite-tip .ct-url a:hover { color: #a04f10; }
+    #cite-tip .ct-fn-body { color: #333; margin-top: 2px; }
+    #cite-tip .ct-fn-body a { color: #6b2c2c; }
+  </style>
 </head>
 <body>
+<div id="topbar-nav">
+  <div class="tb-title">Agents of Chaos</div>
+  <div class="tb-links">
+    <a href="report.html" class="current">Report</a>
+    <a href="index.html">Landing Page</a>
+    <a href="logs.html">Discord</a>
+  </div>
+</div>
 <nav id="sidebar-toc" aria-label="Table of contents">
   <div class="sidebar-title">Contents</div>
   <ul id="sidebar-toc-list"></ul>
@@ -509,6 +577,114 @@ David Bau<sup>1</sup>
     const fakeLnk = { type: 'session', id: sessId, label: a.textContent.trim(), turn: turn ? `turn-${turn}` : null };
     attachHover(a, fakeLnk);
   });
+})();
+</script>
+
+<script>
+// ── Citation & Footnote Tooltips + Bibliography Numbering ─────────────────
+(function() {
+  var tip = document.createElement('div');
+  tip.id = 'cite-tip';
+  document.body.appendChild(tip);
+  var timer = null;
+  var B = window.BIBDATA || {};
+  var F = window.FNDATA || [];
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // Trim author lists: >3 authors → "First et al."
+  function trimAuthors(s) {
+    if (!s) return '';
+    if (s.indexOf(',') === -1 && s.indexOf(' and ') === -1) return s;
+    var parts = s.replace(/,?\s+and\s+/g, ', ').split(/,\s*/);
+    if (parts.length > 3) return parts[0] + ' et al.';
+    if (parts.length === 3) return parts[0] + ', ' + parts[1] + ', and ' + parts[2];
+    if (parts.length === 2) return parts[0] + ' and ' + parts[1];
+    return s;
+  }
+
+  // Extract URL from bibliography DOM entry
+  function getBibUrl(citeKey) {
+    var li = document.getElementById('ref-' + citeKey);
+    if (!li) return null;
+    var a = li.querySelector('.bib-url');
+    return a ? a.href : null;
+  }
+
+  function show(el) {
+    clearTimeout(timer);
+    tip.classList.add('visible');
+    var r = el.getBoundingClientRect();
+    var tw = tip.offsetWidth, th = tip.offsetHeight;
+    var left = r.left + r.width / 2 - tw / 2;
+    var top = r.top - th - 8;
+    if (top < 8) top = r.bottom + 8;
+    left = Math.max(8, Math.min(left, innerWidth - tw - 8));
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+
+  function hide() { timer = setTimeout(function() { tip.classList.remove('visible'); }, 160); }
+
+  tip.addEventListener('mouseenter', function() { clearTimeout(timer); });
+  tip.addEventListener('mouseleave', hide);
+
+  // ── Citation tooltips ──────────────────────────────────────────────────
+  document.querySelectorAll('a.citation[data-cite-key]').forEach(function(a) {
+    a.addEventListener('mouseenter', function() {
+      tip.className = 'ct-citation';
+      tip.id = 'cite-tip';
+      var key = a.getAttribute('data-cite-key');
+      var b = B[key];
+      if (!b) return;
+      var h = '<span class="ct-num">[' + b.n + ']</span>';
+      h += '<span class="ct-authors">' + esc(trimAuthors(b.a)) + '</span>';
+      if (b.t) h += '<span class="ct-title">' + esc(b.t) + '</span>';
+      var v = [b.v, b.y].filter(Boolean).join(', ');
+      if (v) h += '<span class="ct-venue">' + esc(v) + '</span>';
+      var url = getBibUrl(key);
+      if (url) h += '<span class="ct-url"><a href="' + esc(url) + '" target="_blank" rel="noopener">Link ↗</a></span>';
+      tip.innerHTML = h;
+      show(a);
+    });
+    a.addEventListener('mouseleave', hide);
+  });
+
+  // ── Footnote tooltips ──────────────────────────────────────────────────
+  document.querySelectorAll('sup.footnote-ref[data-fn]').forEach(function(sup) {
+    sup.addEventListener('mouseenter', function() {
+      tip.className = 'ct-footnote';
+      tip.id = 'cite-tip';
+      var i = +sup.getAttribute('data-fn');
+      if (!F[i - 1]) return;
+      tip.innerHTML = '<span class="ct-fn-body">' + F[i - 1] + '</span>';
+      show(sup);
+    });
+    sup.addEventListener('mouseleave', hide);
+  });
+
+  // ── Bibliography numbering + sort ──────────────────────────────────────
+  var refNumMap = {};
+  for (var key in B) {
+    if (B.hasOwnProperty(key)) refNumMap['ref-' + key] = B[key].n;
+  }
+  document.querySelectorAll('.bib-entry').forEach(function(li) {
+    var n = refNumMap[li.id];
+    if (n == null) return;
+    var span = document.createElement('span');
+    span.className = 'bib-num';
+    span.textContent = '[' + n + ']';
+    li.insertBefore(span, li.firstChild);
+  });
+  // Sort entries in the list by citation number
+  var bibList = document.querySelector('.bib-list');
+  if (bibList) {
+    var entries = Array.from(bibList.querySelectorAll('.bib-entry'));
+    entries.sort(function(a, b) {
+      return (refNumMap[a.id] || 999) - (refNumMap[b.id] || 999);
+    });
+    entries.forEach(function(li) { bibList.appendChild(li); });
+  }
 })();
 </script>
 </body>

@@ -320,12 +320,13 @@ def extract_evlink(tex):
 # ── Footnote + citation collectors ───────────────────────────────────────────
 
 footnotes = []
-cited_keys = {}
+cited_keys = {}      # key → ref dict (preserves insertion order)
+cite_order = {}      # key → citation number (1-based)
 
 def collect_footnote(content):
     footnotes.append(content)
     n = len(footnotes)
-    return f'<sup class="footnote-ref"><a href="#fn{n}" id="fnref{n}">[{n}]</a></sup>'
+    return f'<sup class="footnote-ref" data-fn="{n}"><a href="#fn{n}" id="fnref{n}">[{n}]</a></sup>'
 
 
 # ── Environment handlers ────────────────────────────────────────────────────
@@ -480,25 +481,25 @@ def convert_inline(text, refs):
         text,
     )
 
-    # Citations
+    # Citations — numbered [1], [2] style with data-cite-key for hover previews
     def cite_html(keys_str, pre="", post="", parenthetical=True):
         parts = []
         for key in re.split(r"\s*,\s*", keys_str.strip()):
             key = key.strip()
             r = refs.get(key, {})
-            author = r.get("author", key)
-            year = r.get("year", "")
-            label = f"{author}, {year}" if year else author
             if key not in cited_keys:
                 cited_keys[key] = r
-            parts.append(f'<a class="citation" href="#ref-{escape(key)}" title="{escape(key)}">{label}</a>')
-        inner = "; ".join(parts)
+                cite_order[key] = len(cite_order) + 1
+            n = cite_order[key]
+            parts.append(
+                f'<a class="citation" href="#ref-{escape(key)}"'
+                f' data-cite-key="{escape(key)}">[{n}]</a>'
+            )
+        inner = ", ".join(parts)
         if pre:
             inner = pre + " " + inner
         if post:
             inner = inner + " " + post
-        if parenthetical:
-            return f"({inner})"
         return inner
 
     def replace_citep(text):
@@ -1082,9 +1083,10 @@ _TEMPLATE_REMOVED = True  # template_report.html loaded at build time
 # ── Main builder ─────────────────────────────────────────────────────────────
 
 def build(paper_dir: Path):
-    global footnotes, cited_keys
+    global footnotes, cited_keys, cite_order
     footnotes = []
     cited_keys = {}
+    cite_order = {}
 
     PUBLIC_DIR.mkdir(exist_ok=True)
     DATA_DIR.mkdir(exist_ok=True)
@@ -1146,6 +1148,21 @@ def build(paper_dir: Path):
     sess_map = json.loads(sess_json.read_text()) if sess_json.exists() else {}
     cs_logs  = json.loads(cs_json.read_text())   if cs_json.exists()   else []
 
+    # Build BIBDATA for citation hover previews
+    bib_data = {}
+    for key, r in cited_keys.items():
+        n = cite_order.get(key, 0)
+        bib_data[key] = {
+            "n": n,
+            "a": format_authors(r.get("author_raw", r.get("author", key))),
+            "t": r.get("title", ""),
+            "y": r.get("year", ""),
+            "v": r.get("journal", "") or r.get("booktitle", ""),
+        }
+
+    # Build FNDATA for footnote hover previews
+    fn_data = footnotes  # list of HTML strings, 0-indexed
+
     inline_data_js = (
         "<script>\n"
         f"window.EVDATA={{\n"
@@ -1154,6 +1171,8 @@ def build(paper_dir: Path):
         f"  sessMap:     {json.dumps(sess_map, ensure_ascii=False)},\n"
         f"  csLogs:      {json.dumps(cs_logs,  ensure_ascii=False)}\n"
         f"}};\n"
+        f"window.BIBDATA={json.dumps(bib_data, ensure_ascii=False)};\n"
+        f"window.FNDATA={json.dumps(fn_data, ensure_ascii=False)};\n"
         "</script>"
     )
 
