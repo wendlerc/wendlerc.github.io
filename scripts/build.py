@@ -234,10 +234,10 @@ def strip_tex_markup(text):
 # ── \evsrc / \evlink extraction ──────────────────────────────────────────────
 
 def extract_evsrc(tex):
-    """Extract \\evsrc[turn]{type}{id}{label} commands from tex.
+    r"""Extract \evsrc[turn]{type}{id}{label} → marker in tex.
 
-    Returns (cleaned_tex, list_of_evsrc_dicts_grouped_by_position).
-    Each dict: {type, id, label, turn (or None), position_in_tex}.
+    Replaces each command with __EVSRC_N__ so the marker survives HTML
+    conversion and can be replaced with source-bar HTML afterwards.
     """
     evsrc_entries = []
     pat = re.compile(r"\\evsrc\b")
@@ -251,39 +251,34 @@ def extract_evsrc(tex):
         start = m.start()
         pos = m.end()
 
-        # Optional [turn]
         turn, pos = get_opt_arg(clean, pos)
-
-        # {type}
         src_type, pos = get_arg(clean, pos)
-        # {id}
         src_id, pos = get_arg(clean, pos)
-        # {label}
         src_label, pos = get_arg(clean, pos)
 
+        idx = len(evsrc_entries)
         evsrc_entries.append({
             "type": src_type.strip(),
             "id": src_id.strip(),
             "label": src_label.strip(),
             "turn": turn.strip() if turn else None,
-            "tex_pos": start,
         })
 
-        # Remove this command from tex
-        clean = clean[:start] + clean[pos:]
-        # Don't advance offset since we removed text
+        marker = f"__EVSRC_{idx}__"
+        clean = clean[:start] + marker + clean[pos:]
+        offset = start + len(marker)
 
     return clean, evsrc_entries
 
 
 def extract_evlink(tex):
-    """Extract \\evlink{id}{display text} commands.
+    r"""Extract \evlink{id}{display text} → display text + marker.
 
-    Returns (cleaned_tex_with_just_display_text, list_of_evlink_dicts).
+    Replaces the command with the display text followed by __EVLINK_N__
+    so the badge can be injected after HTML conversion.
     """
     evlink_entries = []
     pat = re.compile(r"\\evlink\{")
-
     clean = tex
     offset = 0
 
@@ -301,20 +296,143 @@ def extract_evlink(tex):
             continue
 
         ann_id = clean[brace_start + 1 : id_end]
-
-        # Get display text
         display_text, after_pos = get_arg(clean, id_end + 1)
 
+        idx = len(evlink_entries)
         evlink_entries.append({
             "id": ann_id.strip(),
             "display_text": display_text.strip(),
         })
 
-        # Replace \evlink{id}{text} with just {text} (braces will be cleaned later)
-        clean = clean[:start] + display_text + clean[after_pos:]
-        offset = start + len(display_text)
+        marker = f"__EVLINK_{idx}__"
+        replacement = display_text + marker
+        clean = clean[:start] + replacement + clean[after_pos:]
+        offset = start + len(replacement)
 
     return clean, evlink_entries
+
+
+# ── Post-conversion injection of evsrc bars and evlink badges ────────────────
+
+def _render_evsrc_link(entry):
+    """Render a single evsrc entry as an <a> tag for a source bar."""
+    etype = entry["type"]
+    eid = entry["id"]
+    elabel = entry["label"]
+    eturn = entry.get("turn")
+
+    if etype in ("discord_channel", "discord_msg"):
+        href = f"logs.html#msg-{eid}" if etype == "discord_msg" else f"logs.html#ch-{eid}"
+        data_attr = f' data-msg-id="{eid}"' if etype == "discord_msg" else ""
+        return (
+            f'<a href="{href}" class="cs-src-link cs-src-discord"'
+            f' target="_blank"{data_attr}>'
+            f'\U0001f4ac {escape(elabel)}</a>'
+        )
+    elif etype == "session":
+        turn_suffix = f"/turn-{eturn}" if eturn else ""
+        href = f"sessions.html#sess-{eid}{turn_suffix}"
+        data_attrs = f' data-sess-id="{eid}"'
+        if eturn:
+            data_attrs += f' data-turn="{eturn}"'
+        return (
+            f'<a href="{href}" class="cs-src-link cs-src-session"'
+            f' target="_blank"{data_attrs}>'
+            f'\U0001f916 {escape(elabel)}</a>'
+        )
+    return ""
+
+
+def inject_evsrc_bars(html, evsrc_entries):
+    """Replace consecutive __EVSRC_N__ markers with source-bar HTML."""
+    if not evsrc_entries:
+        return html
+
+    marker_pat = re.compile(r'__EVSRC_(\d+)__')
+
+    def build_bar(indices):
+        links = [_render_evsrc_link(evsrc_entries[i]) for i in indices]
+        links = [l for l in links if l]
+        if not links:
+            return ""
+        inner = "\n    ".join(links)
+        return (
+            f'\n<div class="cs-sources">'
+            f'<span class="cs-sources-label">View raw logs:</span>\n    '
+            f'{inner}\n</div>\n'
+        )
+
+    def replace_block(m):
+        indices = [int(x.group(1)) for x in marker_pat.finditer(m.group(0))]
+        return build_bar(indices)
+
+    # Replace <p> tags that contain only markers (and optional <span> anchors)
+    html = re.sub(
+        r'<p>\s*(?:<span[^>]*></span>\s*)?(?:__EVSRC_\d+__\s*)+</p>',
+        replace_block, html
+    )
+    # Catch any remaining loose markers
+    html = re.sub(r'(?:__EVSRC_\d+__\s*)+', replace_block, html)
+    return html
+
+
+def inject_evlink_badges(html, evlink_entries, annotations):
+    """Replace __EVLINK_N__ markers with evidence badge HTML.
+
+    Returns (modified_html, remaining_annotations) where remaining_annotations
+    excludes entries already handled by \\evlink.
+    """
+    if not evlink_entries:
+        return html, annotations
+
+    ann_by_id = {a["id"]: a for a in annotations}
+    used_ids = set()
+
+    for idx, entry in enumerate(evlink_entries):
+        marker = f"__EVLINK_{idx}__"
+        ann = ann_by_id.get(entry["id"])
+
+        if not ann or marker not in html:
+            html = html.replace(marker, "")
+            continue
+
+        used_ids.add(entry["id"])
+        badge_parts = []
+        for lnk in ann.get("links", []):
+            lt = lnk["type"]
+            if lt == "discord_msg":
+                badge_parts.append(
+                    f'<a href="logs.html#msg-{lnk["id"]}" class="ev-link ev-discord"'
+                    f' target="_blank" rel="noopener" title="{escape(lnk.get("label", ""))}"'
+                    f' data-msg-id="{lnk["id"]}">\U0001f4ac</a>'
+                )
+            elif lt == "discord_channel":
+                badge_parts.append(
+                    f'<a href="logs.html#{lnk["id"]}" class="ev-link ev-discord"'
+                    f' target="_blank" rel="noopener" title="{escape(lnk.get("label", ""))}">'
+                    f'\U0001f4ac</a>'
+                )
+            elif lt == "session":
+                tsuf = f"/{lnk['turn']}" if lnk.get("turn") else ""
+                badge_parts.append(
+                    f'<a href="sessions.html#sess-{lnk["id"]}{tsuf}"'
+                    f' class="ev-link ev-session" target="_blank" rel="noopener"'
+                    f' title="{escape(lnk.get("label", ""))}"'
+                    f' data-sess-id="{lnk["id"]}">\U0001f916</a>'
+                )
+            elif lt == "suggestion":
+                badge_parts.append(
+                    f'<a href="suggestions.html#sugg-{lnk["sugg_id"]}"'
+                    f' class="ev-link ev-sugg" target="_blank" rel="noopener"'
+                    f' title="{escape(lnk.get("label", "Edit suggestion"))}">'
+                    f'\u270f\ufe0f</a>'
+                )
+        badge = ('<span class="ev-badge">' + ''.join(badge_parts) + '</span>'
+                 if badge_parts else "")
+        html = html.replace(marker, badge)
+
+    remaining = [a for a in annotations if a["id"] not in used_ids]
+    return html, remaining
 
 
 # ── Footnote + citation collectors ───────────────────────────────────────────
@@ -1121,6 +1239,11 @@ def build(paper_dir: Path):
     print("Converting to HTML...")
     body_html = convert_block(combined, refs, paper_dir)
 
+    # Inject \evsrc source bars (markers → HTML)
+    if evsrc_entries:
+        print(f"  Injecting {len(evsrc_entries)} source-bar entries from \\evsrc...")
+        body_html = inject_evsrc_bars(body_html, evsrc_entries)
+
     # Footnotes section
     fn_html = ""
     if footnotes:
@@ -1147,6 +1270,12 @@ def build(paper_dir: Path):
     msg_idx  = json.loads(msg_json.read_text())  if msg_json.exists()  else {}
     sess_map = json.loads(sess_json.read_text()) if sess_json.exists() else {}
     cs_logs  = json.loads(cs_json.read_text())   if cs_json.exists()   else []
+
+    # Inject \evlink badges (markers → HTML), filtering handled annotations
+    if evlink_entries:
+        print(f"  Injecting {len(evlink_entries)} inline evidence badges from \\evlink...")
+        body_html, ev_anns = inject_evlink_badges(body_html, evlink_entries, ev_anns)
+        print(f"  {len(ev_anns)} annotations remaining for JS engine")
 
     # Build BIBDATA for citation hover previews
     bib_data = {}
@@ -1215,17 +1344,18 @@ def build(paper_dir: Path):
         body_html, count=1, flags=re.DOTALL
     )
 
-    # Insert source bars after case study headings
-    for cs in cs_logs:
-        hid = cs["heading_id"]
-        bar = render_cs_source_bar(cs)
-        if not bar:
-            continue
-        pattern = re.compile(
-            rf'(<h[23][^>]*id="{re.escape(hid)}"[^>]*>.*?</h[23]>)',
-            re.DOTALL
-        )
-        body_html = pattern.sub(lambda m: m.group(1) + bar, body_html, count=1)
+    # Insert source bars after case study headings (JSON fallback, skipped if \evsrc used)
+    if not evsrc_entries:
+        for cs in cs_logs:
+            hid = cs["heading_id"]
+            bar = render_cs_source_bar(cs)
+            if not bar:
+                continue
+            pattern = re.compile(
+                rf'(<h[23][^>]*id="{re.escape(hid)}"[^>]*>.*?</h[23]>)',
+                re.DOTALL
+            )
+            body_html = pattern.sub(lambda m: m.group(1) + bar, body_html, count=1)
 
     print("Building HTML page...")
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
