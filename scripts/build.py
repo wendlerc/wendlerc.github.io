@@ -53,7 +53,7 @@ def parse_bib(bib_path):
     """Parse .bib file into {key: {author, year, title, url, ...}} dict."""
     refs = {}
     text = bib_path.read_text(encoding="utf-8", errors="replace")
-    entry_pat = re.compile(r"@(\w+)\{([^,\n]+),", re.IGNORECASE)
+    entry_pat = re.compile(r"@(\w+)\{\s*([^,\s]+)\s*,", re.IGNORECASE)
 
     def extract_field(name, body):
         pat = re.compile(rf'(?<![a-zA-Z]){re.escape(name)}\s*=\s*', re.IGNORECASE)
@@ -319,6 +319,8 @@ def _render_evsrc_link(entry):
     etype = entry["type"]
     eid = entry["id"]
     elabel = entry["label"]
+    # Unescape LaTeX special characters in labels
+    elabel = elabel.replace("\\&", "&").replace("\\#", "#").replace("\\_", "_")
     eturn = entry.get("turn")
 
     if etype in ("discord_channel", "discord_msg"):
@@ -609,15 +611,36 @@ def convert_inline(text, refs):
                 cited_keys[key] = r
                 cite_order[key] = len(cite_order) + 1
             n = cite_order[key]
-            parts.append(
+            cite_link = (
                 f'<a class="citation" href="#ref-{escape(key)}"'
                 f' data-cite-key="{escape(key)}">[{n}]</a>'
             )
+            # \citet → "Author [N]" or "Author et al. [N]"
+            # \citep[pre][]{key} → "(pre Author [N])"
+            show_author = (not parenthetical) or (parenthetical and pre)
+            if show_author:
+                surname = r.get("author", "")
+                author_raw = r.get("author_raw", "")
+                if surname and author_raw and " and " in author_raw:
+                    author_display = surname + " et al."
+                elif surname:
+                    author_display = surname
+                else:
+                    author_display = ""
+                if author_display:
+                    parts.append(f'{escape(author_display)}\u00a0{cite_link}')
+                else:
+                    parts.append(cite_link)
+            else:
+                parts.append(cite_link)
         inner = ", ".join(parts)
         if pre:
             inner = pre + " " + inner
         if post:
-            inner = inner + " " + post
+            inner = inner + ", " + post
+        # Wrap in parentheses for \citep with pre/post optional args
+        if parenthetical and (pre or post):
+            inner = "(" + inner + ")"
         return inner
 
     def replace_citep(text):
