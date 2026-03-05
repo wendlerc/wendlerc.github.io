@@ -307,24 +307,27 @@
 
 <h3 id="dual-decoder">A dual-decoder compromise</h3>
 
-<p>A practical middle ground would be to decouple the temporal compression from the spatial autoencoder by factoring the 3D VAE into two stages:</p>
+<p>A practical middle ground would be to use temporal compression for storage but train an additional single-frame decoder that can map each temporally compressed latent frame directly to pixels. The key idea: we don't undo the temporal compression at inference. Instead, we teach a decoder to work with the compressed representation natively.</p>
+
+<p>Concretely, the architecture has two encoding paths and two decoding paths:</p>
 
 <ol>
-  <li><strong>Spatial encoder/decoder</strong> (2D, per-frame): maps between pixels and per-frame latents, e.g., \(3 \times H \times W \leftrightarrow c \times \frac{H}{s} \times \frac{W}{s}\).</li>
-  <li><strong>Temporal compressor</strong> (learned, \(t\times\)): maps between per-frame latents and temporally compressed latents, e.g., groups of \(t\) latent frames \(\rightarrow\) 1 compressed latent frame.</li>
+  <li><strong>Full encoder</strong> (for dataset creation): 2D spatial encoder (\(3 \times H \times W \rightarrow c \times \frac{H}{s} \times \frac{W}{s}\)) followed by a learned temporal compressor that folds \(t\) consecutive latent frames into one, yielding the compact representation stored on disk.</li>
+  <li><strong>Full decoder</strong> (for training/evaluation): temporal decompressor that expands back to \(t\) per-frame latents, then 2D spatial decoder to pixels. Used during autoencoder training to ensure reconstruction quality.</li>
+  <li><strong>Single-frame decoder</strong> (for inference): a learned module that maps one temporally compressed latent frame directly to one pixel frame, \(\hat{c} \times \frac{H}{s'} \times \frac{W}{s'} \rightarrow 3 \times H \times W\), without expanding the temporal dimension. This is the only decoder needed at inference time.</li>
 </ol>
 
-<p>During <strong>pretraining</strong>, we apply both stages to produce temporally compressed latents for storage on disk, getting the full \(s^2 \cdot t\) compression benefit. The world model is then trained on sequences of these compressed latent frames.</p>
+<p>During <strong>dataset creation</strong>, we use the full encoder to produce temporally compressed latents for storage, getting the full \(s^2 \cdot t\) compression benefit. The world model is trained on sequences of these compressed latent frames.</p>
 
-<p>During <strong>inference</strong>, we use the temporal compressor's inverse to upsample the world model's output back to per-frame latents, which can then be decoded to pixels one frame at a time using only the spatial decoder. This gives us:</p>
+<p>During <strong>inference</strong>, the world model outputs one compressed latent frame per step, and the single-frame decoder maps it directly to pixels. There is no need to buffer \(t\) frames or run the temporal decompressor. This gives us:</p>
 
 <ul>
   <li>Compact storage and short training sequences (from temporal compression)</li>
-  <li>Frame-by-frame decoding at inference (from the factored architecture)</li>
-  <li>The option to train additional components (e.g., a frame interpolation model) that operate in the per-frame latent space without needing the temporal compressor at all</li>
+  <li>Frame-by-frame decoding at inference with no temporal buffering</li>
+  <li>The world model operates entirely in the compressed latent space &mdash; it never sees per-frame latents at all</li>
 </ul>
 
-<p>The temporal compressor could be a lightweight model &mdash; a small 1D convolutional network along the time axis, or even a learned linear projection &mdash; since it only needs to capture temporal redundancy in the already-compact latent space (\(c \times \frac{H}{s} \times \frac{W}{s}\) per frame). Training it would be cheap relative to either the spatial autoencoder or the world model itself.</p>
+<p>The single-frame decoder would be trained alongside the full autoencoder, with a reconstruction loss that encourages each compressed latent frame to contain enough information to independently decode to a plausible pixel frame. Since each compressed latent already summarizes \(t\) frames of context, this is not as lossy as it might seem &mdash; the compressed representation is richer per frame than uncompressed per-frame latents (more temporal context is baked in). The decoded frame would correspond to a representative frame from the \(t\)-frame window (e.g., the middle or last frame).</p>
 
 
 </body>
