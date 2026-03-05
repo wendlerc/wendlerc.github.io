@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Latent Video Compression Analysis</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2em;
+    }
+    pre {
+      background: #f6f8fa;
+      padding: 1em;
+      border-radius: 5px;
+      overflow-x: auto;
+      margin: 1.5em 0;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+      background: #f6f8fa;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 85%;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: 92%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.5em;
+      margin-bottom: 0.5em;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    p { margin: 1em 0; }
+    a {
+      color: #0366d6;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    img {
+      max-width: 100%;
+      box-sizing: content-box;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+    }
+    table, th, td {
+      border: 1px solid #dfe2e5;
+    }
+    th, td {
+      padding: 6px 13px;
+      text-align: left;
+    }
+    tr:nth-child(even) {
+      background-color: #f6f8fa;
+    }
+    th {
+      background-color: #f1f3f5;
+      font-weight: 600;
+    }
+    blockquote {
+      margin: 0;
+      padding: 0 1em;
+      color: #6a737d;
+      border-left: 0.25em solid #dfe2e5;
+    }
+    ul, ol {
+      padding-left: 2em;
+    }
+    .highlight {
+      background: #fffbdd;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+    }
+    .result-good { color: #22863a; font-weight: 600; }
+    .result-bad { color: #cb2431; font-weight: 600; }
+    .result-neutral { color: #6a737d; font-weight: 600; }
+  </style>
+  <!-- MathJax for rendering math equations -->
+  <script type="text/javascript" id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+</head>
+<body>
+
+<h1 id="latent-video-compression">On the storage cost of latent video representations</h1>
+
+<p><strong>Chris Wendler &amp; Claude Opus 4.6,</strong>
+<strong>03/05/26</strong></p>
+
+<p>We are training a video generation model for Doom gameplay. The pipeline records PvP deathmatch episodes as MP4 video, then encodes each frame into latent space using a pretrained image autoencoder (<a href="https://huggingface.co/mit-han-lab/dc-ae-lite-f32c32-sana-1.1-diffusers">DC-AE-Lite f32c32</a>) so the video model can train directly on latents. While setting up the encoding pipeline across 5 compute nodes, we noticed something surprising: <strong>the encoded latent dataset is barely smaller than the original MP4 recordings.</strong> This note works out why, and under what conditions latent representations actually save storage.</p>
+
+<h2 id="setup">Setup</h2>
+
+<p>Our autoencoder (DC-AE-Lite f32c32) compresses each \(3 \times 480 \times 640\) RGB frame into a \((32, 15, 20)\) float16 latent tensor. That is:</p>
+
+<ul>
+  <li><strong>Spatial compression:</strong> \(s = 32\times\), reducing \(480 \times 640\) to \(15 \times 20\)</li>
+  <li><strong>Channel expansion:</strong> 3 RGB channels &rarr; \(c = 32\) latent channels</li>
+  <li><strong>Precision:</strong> \(p = 2\) bytes (float16)</li>
+  <li><strong>Temporal compression:</strong> none (\(t = 1\)), each frame is encoded independently</li>
+</ul>
+
+<p>The recordings are H.264-compressed MP4 video at 35 fps, stored alongside action and reward arrays in WebDataset tar shards. The dataset contains ~2640 PvP episodes (~340 hours of video across both player perspectives).</p>
+
+<h2 id="empirical">Empirical measurement</h2>
+
+<p>We measured the storage cost per minute of video for both formats:</p>
+
+<table>
+  <tr><th>Format</th><th>Total size</th><th>MB/min</th><th>Details</th></tr>
+  <tr><td>MP4 recordings</td><td>902 GB</td><td><strong>~46</strong></td><td>H.264 video + actions + rewards</td></tr>
+  <tr><td>Latent shards</td><td>~812 GB (projected)</td><td><strong>~40</strong></td><td>Uncompressed float16 numpy arrays</td></tr>
+</table>
+
+<p>The latent representation is only <strong>~13% smaller</strong> than the compressed MP4. This is initially surprising &mdash; we compressed the spatial dimensions by \(32\times\) in each direction, a factor of \(1024\times\) in area. Where did the savings go?</p>
+
+<h2 id="equations">Storage cost equations</h2>
+
+<p>Let \(H, W\) be the video height and width in pixels, \(F\) the frame rate in fps, and \(T\) the duration in seconds. For the autoencoder, let \(s\) be the spatial compression factor, \(c\) the number of latent channels, and \(p\) the bytes per latent value (e.g., \(p = 2\) for float16). For MP4, let \(b\) be the effective bits per pixel, an empirical quantity that captures how efficiently H.264 compresses the content. Finally, let \(t\) denote an optional temporal compression factor (\(t = 1\) means no temporal compression).</p>
+
+<p>The storage cost for uncompressed latents is exact and deterministic:</p>
+
+<p>\[S_{\text{latent}} = c \cdot \frac{H}{s} \cdot \frac{W}{s} \cdot p \cdot F \cdot T\]</p>
+
+<p>For MP4:</p>
+
+<p>\[S_{\text{mp4}} = \frac{b \cdot H \cdot W \cdot F \cdot T}{8}\]</p>
+
+<p>Their ratio is:</p>
+
+<p>\[R = \frac{S_{\text{latent}}}{S_{\text{mp4}}} = \frac{c \cdot p \cdot 8}{b \cdot s^2}\]</p>
+
+<p>Note that \(F\), \(T\), \(H\), and \(W\) all cancel. <strong>The storage ratio depends only on the VAE design parameters \((c, s, p)\) and the MP4 compression quality \(b\).</strong></p>
+
+<p>From our measured data, \(b \approx 0.57\) bits/pixel for Doom gameplay at 480p. Plugging in:</p>
+
+<p>\[R = \frac{32 \cdot 2 \cdot 8}{0.57 \cdot 32^2} = \frac{512}{583.7} \approx 0.88\]</p>
+
+<p>This matches our empirical ratio of \(40.3 / 46.0 = 0.88\).</p>
+
+<h3 id="why-small">Why are the savings so small?</h3>
+
+<p>The autoencoder compresses spatial area by \(s^2 = 1024\times\), but expands the channel dimension from 3 to \(c = 32\) (a \(10.7\times\) increase) and the MP4 was already heavily compressed. The net "raw" compression from the autoencoder is:</p>
+
+<p>\[\text{AE compression} = \frac{3 \cdot H \cdot W \cdot 1\text{ (uint8)}}{c \cdot \frac{H}{s} \cdot \frac{W}{s} \cdot p} = \frac{3 \cdot s^2}{c \cdot p} = \frac{3 \cdot 1024}{32 \cdot 2} = 48\times\]</p>
+
+<p>So relative to raw uncompressed video (3 bytes/pixel), the autoencoder achieves \(48\times\) compression. But H.264 achieves roughly:</p>
+
+<p>\[\text{H.264 compression} = \frac{3 \cdot 8}{b} = \frac{24}{0.57} \approx 42\times\]</p>
+
+<p>The autoencoder and H.264 achieve nearly identical compression ratios through completely different mechanisms. H.264 exploits spatial <em>and</em> temporal redundancy with entropy coding. The autoencoder learns a spatial-only nonlinear transform. The result: a near-tie at 480p.</p>
+
+<h3 id="temporal">Adding temporal compression</h3>
+
+<p>With a 3D VAE that also compresses along the time axis by factor \(t\):</p>
+
+<p>\[R_{\text{temporal}} = \frac{c \cdot p \cdot 8}{b \cdot s^2 \cdot t}\]</p>
+
+<p>This is the most significant lever. For our setup, even \(t = 2\) would bring the ratio from 0.88 to 0.44 &mdash; cutting latent storage in half.</p>
+
+<h3 id="vae-comparison">Comparing VAE architectures</h3>
+
+<p>How does our DC-AE compare to <a href="https://huggingface.co/nvidia/Cosmos-1.0-Tokenizer-CV8x8x8">Cosmos CV8x8x8</a>, a 3D video tokenizer with temporal compression? We compute the storage ratio \(R\) and per-frame latent size for both at 480p (\(b = 0.57\)):</p>
+
+<table>
+  <tr>
+    <th>VAE</th><th>\(s\)</th><th>\(c\)</th><th>\(t\)</th><th>\(p\)</th>
+    <th>Latent shape<br>(per frame)</th><th>Compression<br>vs raw</th><th>\(R\) vs MP4</th><th>MB/min<br>(480p, 35fps)</th>
+  </tr>
+  <tr>
+    <td><strong>DC-AE f32c32</strong> (ours)</td><td>32</td><td>32</td><td>1</td><td>2</td>
+    <td>\(32 \times 15 \times 20\)</td><td>\(48\times\)</td><td>0.88</td><td>40.3</td>
+  </tr>
+  <tr>
+    <td>DC-AE f32c32 + fp8</td><td>32</td><td>32</td><td>1</td><td>1</td>
+    <td>\(32 \times 15 \times 20\)</td><td>\(96\times\)</td><td>0.44</td><td>20.2</td>
+  </tr>
+  <tr>
+    <td><strong>Cosmos CV8x8x8</strong></td><td>8</td><td>16</td><td>8</td><td>2</td>
+    <td>\(16 \times 60 \times 80\)</td><td>\(96\times\)</td><td>0.44</td><td>20.2</td>
+  </tr>
+  <tr>
+    <td>Cosmos CV8x8x8 + fp8</td><td>8</td><td>16</td><td>8</td><td>1</td>
+    <td>\(16 \times 60 \times 80\)</td><td>\(192\times\)</td><td>0.22</td><td>10.1</td>
+  </tr>
+</table>
+
+<p>Cosmos and DC-AE+fp8 land at the same overall compression ratio (\(96\times\) vs raw, \(R = 0.44\)) despite very different designs. DC-AE compresses space aggressively (\(32\times\)) but keeps all frames; Cosmos compresses space modestly (\(8\times\)) but removes 7 out of 8 temporal frames. The result is the same bytes on disk, but with very different latent geometries: DC-AE gives tiny spatial grids (\(15 \times 20\)) at full temporal resolution, while Cosmos gives larger spatial grids (\(60 \times 80\)) at \(\frac{1}{8}\) temporal resolution.</p>
+
+<p>For a video diffusion model, the Cosmos-style tradeoff is generally preferable: the \(8\times\) shorter sequence length dramatically reduces the quadratic cost of attention, which more than compensates for the larger per-frame spatial dimensions.</p>
+
+<h2 id="resolution">Resolution dependence</h2>
+
+<p>While the ratio \(R\) appears resolution-independent in the formula, this is misleading. In practice, H.264's effective bits-per-pixel \(b\) <em>decreases</em> at higher resolutions because there is more spatial redundancy to exploit (neighboring pixels in a Doom corridor are very similar). Meanwhile, the latent size scales exactly as \((H/s) \times (W/s)\) with no such benefit.</p>
+
+<p>We estimate \(b\) for Doom gameplay content at various resolutions (480p is measured, others estimated from typical H.264 behavior on game content):</p>
+
+<table>
+  <tr>
+    <th>Resolution</th><th>H&times;W</th><th>Latent dims</th><th>\(b\) (bpp)</th>
+    <th>MP4<br>MB/min</th><th>Latent<br>MB/min</th><th>\(R\)</th>
+    <th>\(t{=}4\)<br>MB/min</th><th>\(t{=}8\)<br>MB/min</th><th>\(t{=}8\)+fp8<br>MB/min</th>
+  </tr>
+  <tr><td>240p</td><td>240&times;426</td><td>8&times;14</td><td>0.80</td><td>21.5</td><td>15.1</td><td class="result-good">0.70</td><td>3.8</td><td>1.9</td><td>0.9</td></tr>
+  <tr><td>360p</td><td>360&times;640</td><td>12&times;20</td><td>0.68</td><td>41.1</td><td>32.3</td><td class="result-good">0.78</td><td>8.1</td><td>4.0</td><td>2.0</td></tr>
+  <tr><td><strong>480p</strong></td><td><strong>480&times;640</strong></td><td><strong>15&times;20</strong></td><td><strong>0.57</strong></td><td><strong>46.0</strong></td><td><strong>40.3</strong></td><td><strong>0.88</strong></td><td><strong>10.1</strong></td><td><strong>5.0</strong></td><td><strong>2.5</strong></td></tr>
+  <tr><td>720p</td><td>720&times;1280</td><td>23&times;40</td><td>0.40</td><td>96.8</td><td>123.6</td><td class="result-bad">1.28</td><td>30.9</td><td>15.5</td><td>7.7</td></tr>
+  <tr><td>1080p</td><td>1080&times;1920</td><td>34&times;60</td><td>0.30</td><td>163.3</td><td>274.2</td><td class="result-bad">1.68</td><td>68.5</td><td>34.3</td><td>17.1</td></tr>
+  <tr><td>1440p</td><td>1440&times;2560</td><td>45&times;80</td><td>0.22</td><td>212.9</td><td>483.8</td><td class="result-bad">2.27</td><td>121.0</td><td>60.5</td><td>30.2</td></tr>
+  <tr><td>4K</td><td>2160&times;3840</td><td>68&times;120</td><td>0.17</td><td>370.1</td><td>1096.7</td><td class="result-bad">2.96</td><td>274.2</td><td>137.1</td><td>68.5</td></tr>
+</table>
+
+<p><strong>At 720p and above, raw float16 latents are larger than the MP4 recordings.</strong> At 4K, latents would be nearly \(3\times\) the size of MP4. The crossover happens because H.264 gets relatively more efficient at higher resolution while latent size scales proportionally.</p>
+
+<h3 id="crossover">When do latents beat MP4?</h3>
+
+<p>Setting \(R_{\text{temporal}} < 1\) and solving for \(t\):</p>
+
+<p>\[t > \frac{c \cdot p \cdot 8}{b \cdot s^2}\]</p>
+
+<table>
+  <tr><th>Resolution</th><th>Minimum temporal compression to beat MP4</th></tr>
+  <tr><td>240p &ndash; 480p</td><td class="result-good">Already smaller (\(R < 1\))</td></tr>
+  <tr><td>720p</td><td>\(t \geq 1.3\times\)</td></tr>
+  <tr><td>1080p</td><td>\(t \geq 1.7\times\)</td></tr>
+  <tr><td>1440p</td><td>\(t \geq 2.3\times\)</td></tr>
+  <tr><td>4K</td><td>\(t \geq 3.0\times\)</td></tr>
+</table>
+
+<p>Note that these thresholds are very modest &mdash; real 3D VAEs (e.g., Cosmos CV8x8x8) typically use \(t = 4\) or \(t = 8\). Any temporal compression beyond these thresholds is pure savings.</p>
+
+
+<h2 id="dataset-sizes">Projected dataset sizes</h2>
+
+<p>Our full PvP dataset at various hypothetical resolutions (~340 hours of video):</p>
+
+<table>
+  <tr><th>Resolution</th><th>MP4</th><th>Latent (fp16)</th><th>Latent (\(t{=}8\), fp8)</th></tr>
+  <tr><td>240p</td><td>0.44 TB</td><td>0.31 TB</td><td>19 GB</td></tr>
+  <tr><td><strong>480p</strong></td><td><strong>0.94 TB</strong></td><td><strong>0.82 TB</strong></td><td><strong>51 GB</strong></td></tr>
+  <tr><td>720p</td><td>1.97 TB</td><td>2.52 TB</td><td>158 GB</td></tr>
+  <tr><td>1080p</td><td>3.33 TB</td><td>5.59 TB</td><td>350 GB</td></tr>
+  <tr><td>4K</td><td>7.55 TB</td><td>22.37 TB</td><td>1.40 TB</td></tr>
+</table>
+
+<p>The best-case scenario (temporal compression \(t=8\) + fp8 precision) would reduce our current 480p dataset from 820 GB to <strong>51 GB</strong> &mdash; small enough to fit entirely in RAM during training.</p>
+
+
+<h2 id="post-hoc">Can we compress latents after the fact?</h2>
+
+<p>We benchmarked several post-hoc compression strategies on our existing latent shards:</p>
+
+<table>
+  <tr><th>Method</th><th>MB/min</th><th>% of raw</th><th>Lossless?</th></tr>
+  <tr><td>Raw float16 (baseline)</td><td>40.3</td><td>100%</td><td>yes</td></tr>
+  <tr><td>zstd</td><td>37.1</td><td>92.1%</td><td>yes</td></tr>
+  <tr><td>Delta encoding + zstd</td><td>36.6</td><td>90.8%</td><td>~yes</td></tr>
+  <tr><td>Delta + int8 + zstd</td><td>12.7</td><td>31.5%</td><td class="result-bad">no (MSE ~100k)</td></tr>
+</table>
+
+<p>Lossless compression yields only ~9% savings. The frame-to-frame delta values are still high-entropy float16 numbers that generic compressors struggle with. Lossy int8 quantization achieves large savings (69%) but introduces unacceptable reconstruction error because the quantization must cover a wide dynamic range of delta values.</p>
+
+<p>Per-channel int8 quantization of deltas (clipping outliers at \(n\sigma\)) improves things somewhat but still accumulates drift over thousands of frames through the cumulative sum reconstruction:</p>
+
+<table>
+  <tr><th>Clip threshold</th><th>% of raw</th><th>MSE</th><th>Max error</th></tr>
+  <tr><td>\(3\sigma\)</td><td>45.1%</td><td>102.2</td><td>227.7</td></tr>
+  <tr><td>\(4\sigma\)</td><td>42.8%</td><td>35.7</td><td>232.2</td></tr>
+  <tr><td>\(6\sigma\)</td><td>39.2%</td><td>18.1</td><td>216.1</td></tr>
+  <tr><td>\(8\sigma\)</td><td>36.5%</td><td>13.8</td><td>94.4</td></tr>
+</table>
+
+<p>A survey of the literature confirms that <strong>nobody in practice compresses pre-encoded latents further.</strong> Projects like Open-Sora, Cosmos, and Stable Video Diffusion all store raw latent tensors. The consensus approach is to eat the disk cost.</p>
+
+
+<h2 id="discussion">Discussion</h2>
+
+<p>The fundamental issue is that a spatial-only image autoencoder and H.264 are solving overlapping problems. Both reduce spatial redundancy &mdash; the autoencoder through a learned nonlinear transform, H.264 through block-based DCT and motion compensation. They arrive at remarkably similar compression ratios (~42&ndash;48&times; vs raw) through completely different mechanisms.</p>
+
+<p>The autoencoder's real value is not storage efficiency but <strong>representational</strong>: the latent space is structured for generation, not just compression. Training a diffusion model on \(15 \times 20 \times 32\) latent frames is vastly cheaper than on \(480 \times 640 \times 3\) pixel frames, regardless of how they're stored on disk.</p>
+
+<p>For future work, the most impactful change would be switching to a <strong>3D VAE with temporal compression</strong> (e.g., Cosmos-style \(t = 8\)). This would:</p>
+
+<ol>
+  <li>Reduce dataset storage by \(8\times\) (820 GB &rarr; ~100 GB)</li>
+  <li>Reduce the sequence length the video model needs to process by \(8\times\)</li>
+  <li>Make latent storage decisively smaller than MP4 even at high resolutions</li>
+</ol>
+
+<p>The storage savings are a side benefit &mdash; the real win is the \(8\times\) shorter sequences for the video model.</p>
+
+
+</body>
+</html>
