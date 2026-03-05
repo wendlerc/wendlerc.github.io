@@ -303,6 +303,29 @@
 
 <p>The storage savings are a side benefit &mdash; the real win is the \(8\times\) shorter sequences for the video model.</p>
 
+<p>However, full temporal compression introduces a problem for interactive applications like game world models: during inference, we want to generate and decode <strong>one frame at a time</strong> (e.g., to render the next frame given a player action), but a 3D VAE with \(t = 8\) can only decode in chunks of 8 frames. This latency is unacceptable for real-time interaction.</p>
+
+<h3 id="dual-decoder">A dual-decoder compromise</h3>
+
+<p>A practical middle ground would be to decouple the temporal compression from the spatial autoencoder by factoring the 3D VAE into two stages:</p>
+
+<ol>
+  <li><strong>Spatial encoder/decoder</strong> (2D, per-frame): maps between pixels and per-frame latents, e.g., \(3 \times H \times W \leftrightarrow c \times \frac{H}{s} \times \frac{W}{s}\).</li>
+  <li><strong>Temporal compressor</strong> (learned, \(t\times\)): maps between per-frame latents and temporally compressed latents, e.g., groups of \(t\) latent frames \(\rightarrow\) 1 compressed latent frame.</li>
+</ol>
+
+<p>During <strong>pretraining</strong>, we apply both stages to produce temporally compressed latents for storage on disk, getting the full \(s^2 \cdot t\) compression benefit. The world model is then trained on sequences of these compressed latent frames.</p>
+
+<p>During <strong>inference</strong>, we use the temporal compressor's inverse to upsample the world model's output back to per-frame latents, which can then be decoded to pixels one frame at a time using only the spatial decoder. This gives us:</p>
+
+<ul>
+  <li>Compact storage and short training sequences (from temporal compression)</li>
+  <li>Frame-by-frame decoding at inference (from the factored architecture)</li>
+  <li>The option to train additional components (e.g., a frame interpolation model) that operate in the per-frame latent space without needing the temporal compressor at all</li>
+</ul>
+
+<p>The temporal compressor could be a lightweight model &mdash; a small 1D convolutional network along the time axis, or even a learned linear projection &mdash; since it only needs to capture temporal redundancy in the already-compact latent space (\(c \times \frac{H}{s} \times \frac{W}{s}\) per frame). Training it would be cheap relative to either the spatial autoencoder or the world model itself.</p>
+
 
 </body>
 </html>
