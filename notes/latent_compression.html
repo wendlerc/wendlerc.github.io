@@ -213,15 +213,15 @@
   <tr>
     <th>Resolution</th><th>H&times;W</th><th>Latent dims</th><th>\(b\) (bpp)</th>
     <th>MP4<br>MB/min</th><th>Latent<br>MB/min</th><th>\(R\)</th>
-    <th>\(t{=}4\)<br>MB/min</th><th>\(t{=}8\)<br>MB/min</th><th>\(t{=}8\)+fp8<br>MB/min</th>
+    <th>\(t{=}4\)<br>MB/min</th><th>\(R_{t=4}\)</th><th>\(t{=}8\)<br>MB/min</th><th>\(R_{t=8}\)</th><th>\(t{=}8\)+fp8<br>MB/min</th><th>\(R_{t=8,\text{fp8}}\)</th>
   </tr>
-  <tr><td>240p</td><td>240&times;426</td><td>8&times;14</td><td>0.80</td><td>21.5</td><td>15.1</td><td class="result-good">0.70</td><td>3.8</td><td>1.9</td><td>0.9</td></tr>
-  <tr><td>360p</td><td>360&times;640</td><td>12&times;20</td><td>0.68</td><td>41.1</td><td>32.3</td><td class="result-good">0.78</td><td>8.1</td><td>4.0</td><td>2.0</td></tr>
-  <tr><td><strong>480p</strong></td><td><strong>480&times;640</strong></td><td><strong>15&times;20</strong></td><td><strong>0.57</strong></td><td><strong>46.0</strong></td><td><strong>40.3</strong></td><td><strong>0.88</strong></td><td><strong>10.1</strong></td><td><strong>5.0</strong></td><td><strong>2.5</strong></td></tr>
-  <tr><td>720p</td><td>720&times;1280</td><td>23&times;40</td><td>0.40</td><td>96.8</td><td>123.6</td><td class="result-bad">1.28</td><td>30.9</td><td>15.5</td><td>7.7</td></tr>
-  <tr><td>1080p</td><td>1080&times;1920</td><td>34&times;60</td><td>0.30</td><td>163.3</td><td>274.2</td><td class="result-bad">1.68</td><td>68.5</td><td>34.3</td><td>17.1</td></tr>
-  <tr><td>1440p</td><td>1440&times;2560</td><td>45&times;80</td><td>0.22</td><td>212.9</td><td>483.8</td><td class="result-bad">2.27</td><td>121.0</td><td>60.5</td><td>30.2</td></tr>
-  <tr><td>4K</td><td>2160&times;3840</td><td>68&times;120</td><td>0.17</td><td>370.1</td><td>1096.7</td><td class="result-bad">2.96</td><td>274.2</td><td>137.1</td><td>68.5</td></tr>
+  <tr><td>240p</td><td>240&times;426</td><td>8&times;14</td><td>0.80</td><td>21.5</td><td>15.1</td><td class="result-good">0.70</td><td>3.8</td><td class="result-good">0.18</td><td>1.9</td><td class="result-good">0.09</td><td>0.9</td><td class="result-good">0.04</td></tr>
+  <tr><td>360p</td><td>360&times;640</td><td>12&times;20</td><td>0.68</td><td>41.1</td><td>32.3</td><td class="result-good">0.78</td><td>8.1</td><td class="result-good">0.20</td><td>4.0</td><td class="result-good">0.10</td><td>2.0</td><td class="result-good">0.05</td></tr>
+  <tr><td><strong>480p</strong></td><td><strong>480&times;640</strong></td><td><strong>15&times;20</strong></td><td><strong>0.57</strong></td><td><strong>46.0</strong></td><td><strong>40.3</strong></td><td><strong>0.88</strong></td><td><strong>10.1</strong></td><td class="result-good"><strong>0.22</strong></td><td><strong>5.0</strong></td><td class="result-good"><strong>0.11</strong></td><td><strong>2.5</strong></td><td class="result-good"><strong>0.05</strong></td></tr>
+  <tr><td>720p</td><td>720&times;1280</td><td>23&times;40</td><td>0.40</td><td>96.8</td><td>123.6</td><td class="result-bad">1.28</td><td>30.9</td><td class="result-good">0.32</td><td>15.5</td><td class="result-good">0.16</td><td>7.7</td><td class="result-good">0.08</td></tr>
+  <tr><td>1080p</td><td>1080&times;1920</td><td>34&times;60</td><td>0.30</td><td>163.3</td><td>274.2</td><td class="result-bad">1.68</td><td>68.5</td><td class="result-good">0.42</td><td>34.3</td><td class="result-good">0.21</td><td>17.1</td><td class="result-good">0.10</td></tr>
+  <tr><td>1440p</td><td>1440&times;2560</td><td>45&times;80</td><td>0.22</td><td>212.9</td><td>483.8</td><td class="result-bad">2.27</td><td>121.0</td><td class="result-good">0.57</td><td>60.5</td><td class="result-good">0.28</td><td>30.2</td><td class="result-good">0.14</td></tr>
+  <tr><td>4K</td><td>2160&times;3840</td><td>68&times;120</td><td>0.17</td><td>370.1</td><td>1096.7</td><td class="result-bad">2.96</td><td>274.2</td><td class="result-good">0.74</td><td>137.1</td><td class="result-good">0.37</td><td>68.5</td><td class="result-good">0.19</td></tr>
 </table>
 
 <p><strong>At 720p and above, raw float16 latents are larger than the MP4 recordings.</strong> At 4K, latents would be nearly \(3\times\) the size of MP4. The crossover happens because H.264 gets relatively more efficient at higher resolution while latent size scales proportionally.</p>
