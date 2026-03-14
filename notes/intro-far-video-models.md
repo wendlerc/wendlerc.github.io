@@ -11,6 +11,7 @@ Build a decoder-only transformer from scratch and understand KV caching for effi
 * [ARENA Chapter 1.1: Transformer from Scratch](https://arena-chapter1-transformer-interp.streamlit.app/[1.1]_Transformer_from_Scratch) -- step-by-step implementation of a transformer
 * 🔵 code: [minGPT / nanoGPT](https://github.com/karpathy/minGPT) -- Karpathy's clean, minimal GPT implementations
 * 🟢 read: [Coding the KV Cache in LLMs from Scratch](https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms) -- Sebastian Raschka's hands-on walkthrough of KV caching
+* 📓 **[Exercise notebook 1: KV-Cache for Decoder-Only Transformers](ex1-kv-cache.html)** -- hands-on exercises starting from a working transformer and adding KV caching
 
 ## 2. MNIST & class-conditional MNIST using flow matching
 
@@ -23,6 +24,7 @@ Learn diffusion and flow matching by generating images on MNIST. The references 
 * 🟢 read: [Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2403.03206) -- nowadays everyone is doing rectified flow matching
 * 🔵 code: [Rectified flow matching on MNIST](https://github.com/wendlerc/mnist) -- beautiful minimal implementation on MNIST
 * 🔵 code: [minRF: Rectified flow matching on CIFAR](https://github.com/cloneofsimo/minRF) -- minimal implementation on CIFAR
+* 📓 **[Exercise notebook 2: Flow Matching on MNIST](ex2-flow-matching-mnist.html)** -- build a DiT from scratch: patchify, flow matching, training, sampling, and classifier-free guidance
 
 ## 3. Pong using flow matching
 
@@ -33,7 +35,10 @@ Move from images to video: generate pong games using flow-matching-based video m
 * 🟣 bonus: [CausVid](https://arxiv.org/abs/2412.07772v1) -- causal video generation (advanced)
 * 🟣 bonus: [Self-Forcing](https://arxiv.org/abs/2506.08009) -- training autoregressive video models without teacher forcing (advanced)
 * 🔵 code: [Minimal diffusion forcing implementation](https://github.com/wendlerc/toy-wm/) -- a toy implementation to get started
+* 📓 **[Exercise notebook 3: Frame-Autoregressive Pong](ex3-far-pong.html)** -- extend the MNIST model to video with causal attention, action conditioning, and diffusion forcing
 
 ## 4. KV caching for frame-autoregressive transformers
 
 Combine KV caching (from step 1) with flow-matching video generation (from step 3) for efficient frame-autoregressive world models.
+
+* 📓 **[Exercise notebook 4: KV Caching for FAR Inference](ex4-far-kv-cache.html)** -- add KV caching to the video model for efficient autoregressive generation

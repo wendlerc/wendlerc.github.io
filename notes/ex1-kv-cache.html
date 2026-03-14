@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exercise 1: KV-Cache for Decoder-Only Transformers</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2em;
+    }
+    pre {
+      background: #f6f8fa;
+      padding: 1em;
+      border-radius: 5px;
+      overflow-x: auto;
+      margin: 1.5em 0;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+      background: #f6f8fa;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 85%;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: 92%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.5em;
+      margin-bottom: 0.5em;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    p { margin: 1em 0; }
+    a { color: #0366d6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { max-width: 100%; }
+    blockquote {
+      margin: 0;
+      padding: 0 1em;
+      color: #6a737d;
+      border-left: 0.25em solid #dfe2e5;
+    }
+    ul, ol { padding-left: 2em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    table, th, td { border: 1px solid #dfe2e5; }
+    th, td { padding: 6px 13px; text-align: left; }
+    tr:nth-child(even) { background-color: #f6f8fa; }
+
+    /* Exercise styling */
+    .exercise {
+      border: 2px solid #0366d6;
+      border-radius: 8px;
+      padding: 1.2em;
+      margin: 1.5em 0;
+      background: #f8fbff;
+    }
+    .exercise h3 { margin-top: 0; color: #0366d6; }
+    .exercise-meta {
+      font-size: 0.85em;
+      color: #586069;
+      margin-bottom: 0.8em;
+    }
+    details {
+      margin: 0.8em 0;
+      border: 1px solid #e1e4e8;
+      border-radius: 5px;
+      background: #fff;
+    }
+    details summary {
+      padding: 0.5em 1em;
+      cursor: pointer;
+      font-weight: 600;
+      color: #0366d6;
+      background: #f1f8ff;
+      border-radius: 5px;
+    }
+    details[open] summary {
+      border-bottom: 1px solid #e1e4e8;
+      border-radius: 5px 5px 0 0;
+    }
+    details > *:not(summary) {
+      padding: 0 1em;
+    }
+    .learning-obj {
+      background: #f0fff4;
+      border-left: 4px solid #28a745;
+      padding: 0.8em 1em;
+      margin: 1em 0;
+      border-radius: 0 5px 5px 0;
+    }
+    .note {
+      background: #fffbdd;
+      border-left: 4px solid #f9c513;
+      padding: 0.8em 1em;
+      margin: 1em 0;
+      border-radius: 0 5px 5px 0;
+    }
+    .nav-link {
+      display: inline-block;
+      margin: 0.5em 0;
+      padding: 0.4em 0.8em;
+      background: #f1f8ff;
+      border-radius: 5px;
+      border: 1px solid #0366d6;
+    }
+  </style>
+  <script type="text/javascript" id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+</head>
+<body>
+
+<p><a href="intro-far-video-models.html">&larr; Back to reading list</a></p>
+
+<h1>Exercise 1: KV-Cache for Decoder-Only Transformers</h1>
+
+<div class="learning-obj">
+<strong>Learning objectives:</strong>
+<ul>
+  <li>Understand why autoregressive generation is slow without caching</li>
+  <li>Implement a KV-Cache that stores key-value pairs from previous tokens</li>
+  <li>Modify a transformer's attention to use cached K,V tensors</li>
+  <li>Achieve significant speedups for autoregressive generation</li>
+</ul>
+</div>
+
+<p><strong>Prerequisites:</strong> A working decoder-only transformer implementation (e.g. from <a href="https://arena-chapter1-transformer-interp.streamlit.app/[1.1]_Transformer_from_Scratch">ARENA Chapter 1.1</a>). You should have implemented <code>Attention</code>, <code>MLP</code>, <code>TransformerBlock</code>, and a full <code>Transformer</code> class.</p>
+
+<h2>Setup</h2>
+
+<p>Start by copying your working transformer code from ARENA into a new notebook. You'll also need these imports:</p>
+
+<pre><code class="language-python">import torch
+import torch as t
+from torch import nn
+import time
+from dataclasses import dataclass
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+</code></pre>
+
+<h2>Background: The Problem with Naive Generation</h2>
+
+<p>In autoregressive generation, we produce tokens one at a time. At each step, we feed the <em>entire</em> sequence so far through the model to get the next token prediction. This means:</p>
+
+<ul>
+  <li>Step 1: process 1 token</li>
+  <li>Step 2: process 2 tokens</li>
+  <li>Step \(n\): process \(n\) tokens</li>
+</ul>
+
+<p>The total work is \(O(n^2)\) in the sequence length. But notice: at step \(n\), the keys and values for tokens \(1\) through \(n{-}1\) are <em>exactly the same</em> as they were at step \(n{-}1\). We're recomputing them for no reason!</p>
+
+<p>The <strong>KV-Cache</strong> stores the key and value projections from all previous tokens, so at each generation step we only need to compute Q, K, V for the <em>new</em> token and retrieve cached K, V for the rest.</p>
+
+<h2>Starter Code: Minimal Transformer</h2>
+
+<p>Here is a minimal decoder-only transformer. If you completed the ARENA exercises, your implementation may differ in details, but the key ideas are the same. Read through this carefully and make sure you understand each component.</p>
+
+<pre><code class="language-python">class RMSNorm(nn.Module):
+    def __init__(self, d, eps=1e-6):
+        super().__init__()
+        self.scale = nn.Parameter(t.ones(d))
+        self.eps = eps
+
+    def forward(self, x):
+        rms = (x.pow(2).mean(dim=-1, keepdim=True) + self.eps).sqrt()
+        return x / rms * self.scale
+
+
+class Attention(nn.Module):
+    def __init__(self, d=64, n_head=4):
+        super().__init__()
+        self.n_head = n_head
+        self.d_head = d // n_head
+        self.QKV = nn.Linear(d, 3 * d, bias=False)
+        self.O = nn.Linear(d, d, bias=False)
+
+    def forward(self, x):
+        b, s, d = x.shape
+        q, k, v = self.QKV(x).chunk(3, dim=-1)
+        q = q.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+        k = k.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+        v = v.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+
+        # Causal attention
+        attn = (q @ k.transpose(-2, -1)) / (self.d_head ** 0.5)
+        mask = t.triu(t.ones(s, s, device=x.device, dtype=t.bool), diagonal=1)
+        attn = attn.masked_fill(mask, float('-inf'))
+        attn = attn.softmax(dim=-1)
+        out = attn @ v
+
+        out = out.transpose(1, 2).reshape(b, s, d)
+        return self.O(out)
+
+
+class MLP(nn.Module):
+    def __init__(self, d=64, exp=4):
+        super().__init__()
+        self.up = nn.Linear(d, exp * d, bias=False)
+        self.gate = nn.Linear(d, exp * d, bias=False)
+        self.down = nn.Linear(exp * d, d, bias=False)
+        self.act = nn.SiLU()
+
+    def forward(self, x):
+        return self.down(self.up(x) * self.act(self.gate(x)))
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, d=64, n_head=4, exp=4):
+        super().__init__()
+        self.norm1 = RMSNorm(d)
+        self.attn = Attention(d, n_head)
+        self.norm2 = RMSNorm(d)
+        self.mlp = MLP(d, exp)
+
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+
+class Transformer(nn.Module):
+    def __init__(self, vocab_size=256, n_ctx=128, d=64, n_head=4, n_layers=4, exp=4):
+        super().__init__()
+        self.tok_emb = nn.Embedding(vocab_size, d)
+        self.pos_emb = nn.Embedding(n_ctx, d)
+        self.blocks = nn.ModuleList([TransformerBlock(d, n_head, exp) for _ in range(n_layers)])
+        self.norm = RMSNorm(d)
+        self.unembed = nn.Linear(d, vocab_size, bias=False)
+
+    def forward(self, tokens):
+        b, s = tokens.shape
+        x = self.tok_emb(tokens) + self.pos_emb(t.arange(s, device=tokens.device))
+        for block in self.blocks:
+            x = block(x)
+        x = self.norm(x)
+        return self.unembed(x)
+</code></pre>
+
+<p>Verify it works:</p>
+
+<pre><code class="language-python">model = Transformer().to(device)
+tokens = t.randint(0, 256, (2, 32), device=device)
+logits = model(tokens)
+print(f"Input shape: {tokens.shape}")
+print(f"Output shape: {logits.shape}")  # Should be [2, 32, 256]
+</code></pre>
+
+<!-- ==================== EXERCISE 1 ==================== -->
+<div class="exercise">
+<h3>Exercise 1 &mdash; Implement Naive Autoregressive Generation</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x2b55;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x2b55;&#x2b55; &nbsp;|&nbsp; ~10 min</p>
+
+<p>Before adding caching, implement naive autoregressive generation. At each step, feed the <em>entire</em> sequence through the model and sample the next token from the last position's logits.</p>
+
+<pre><code class="language-python">@t.no_grad()
+def generate_naive(model, prompt, max_new_tokens=50, temperature=1.0):
+    """Generate tokens autoregressively without KV cache.
+
+    Args:
+        model: Transformer model
+        prompt: tensor of shape (batch, seq_len) with prompt token ids
+        max_new_tokens: number of tokens to generate
+        temperature: sampling temperature
+
+    Returns:
+        tensor of shape (batch, seq_len + max_new_tokens) with generated tokens
+    """
+    tokens = prompt.clone()
+    for _ in range(max_new_tokens):
+        # YOUR CODE HERE
+        # 1. Forward pass through the model with the full sequence
+        # 2. Get logits at the last position
+        # 3. Apply temperature and sample
+        # 4. Append to the token sequence
+        pass
+    return tokens
+</code></pre>
+
+<p>Test it:</p>
+<pre><code class="language-python">model = Transformer().to(device)
+prompt = t.randint(0, 256, (1, 5), device=device)
+output = generate_naive(model, prompt, max_new_tokens=20)
+assert output.shape == (1, 25), f"Expected shape (1, 25), got {output.shape}"
+print("Naive generation works!")
+</code></pre>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">@t.no_grad()
+def generate_naive(model, prompt, max_new_tokens=50, temperature=1.0):
+    tokens = prompt.clone()
+    for _ in range(max_new_tokens):
+        logits = model(tokens)
+        next_logits = logits[:, -1, :] / temperature
+        next_token = t.multinomial(next_logits.softmax(dim=-1), 1)
+        tokens = t.cat([tokens, next_token], dim=1)
+    return tokens
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 2 ==================== -->
+<div class="exercise">
+<h3>Exercise 2 &mdash; Understand the Redundancy</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x2b55;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~10 min</p>
+
+<p>This is a conceptual exercise. Look at the <code>Attention.forward</code> method and answer these questions (discuss with your partner or write your answers):</p>
+
+<ol>
+  <li>At generation step \(n\), we compute <code>q, k, v = self.QKV(x).chunk(3, dim=-1)</code> for all \(n\) positions. Which of these computations are redundant (i.e., produce the same result as step \(n{-}1\))?</li>
+  <li>The causal mask ensures position \(i\) only attends to positions \(\le i\). When generating position \(n\), do the attention outputs at positions \(1, \ldots, n{-}1\) change compared to the previous step?</li>
+  <li>If we only need the logit at the <em>last</em> position for sampling, what's the minimum amount of computation we need at each step?</li>
+</ol>
+
+<details>
+<summary>Solution</summary>
+<ol>
+  <li>The K and V projections for positions \(1, \ldots, n{-}1\) are identical to the previous step. Only position \(n\)'s K and V are new. The Q at position \(n\) is also new, but importantly we <em>only need</em> Q at position \(n\) (since we only care about the last position's output).</li>
+  <li>No. Due to the causal mask, the attention outputs at positions \(1, \ldots, n{-}1\) are unchanged&mdash;they only attend to positions before them, which haven't changed.</li>
+  <li>At each step we only need to: (a) compute Q, K, V for the new token only, (b) retrieve cached K, V for previous tokens, (c) compute attention between the new Q and all K's, (d) compute the weighted sum over all V's, (e) run the MLP on the new position only. This reduces per-step cost from \(O(n \cdot d)\) to \(O(d)\) for the linear layers (with \(O(n)\) for the attention dot products, which is unavoidable).</li>
+</ol>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 3 ==================== -->
+<div class="exercise">
+<h3>Exercise 3 &mdash; Implement KVCache</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~15 min</p>
+
+<p>Implement a simple KV-Cache as a Python class. The cache should store key and value tensors for each layer and support appending new K, V entries.</p>
+
+<pre><code class="language-python">class KVCache:
+    """Stores cached key-value pairs for each layer."""
+
+    def __init__(self, n_layers):
+        # YOUR CODE HERE
+        # Initialize empty cache for each layer
+        # Each layer should store (keys, values) or None
+        pass
+
+    def update(self, layer_idx, new_keys, new_values):
+        """Append new keys and values to the cache for a given layer.
+
+        Args:
+            layer_idx: which transformer layer
+            new_keys: tensor of shape (batch, n_head, new_seq, d_head)
+            new_values: tensor of shape (batch, n_head, new_seq, d_head)
+
+        Returns:
+            (all_keys, all_values): concatenated cached + new tensors
+        """
+        # YOUR CODE HERE
+        pass
+</code></pre>
+
+<p>Test it:</p>
+<pre><code class="language-python">cache = KVCache(n_layers=4)
+k = t.randn(2, 4, 5, 16)  # batch=2, heads=4, seq=5, d_head=16
+v = t.randn(2, 4, 5, 16)
+all_k, all_v = cache.update(0, k, v)
+assert all_k.shape == (2, 4, 5, 16)
+
+k2 = t.randn(2, 4, 1, 16)  # one new token
+v2 = t.randn(2, 4, 1, 16)
+all_k, all_v = cache.update(0, k2, v2)
+assert all_k.shape == (2, 4, 6, 16), f"Expected seq_len=6 after appending, got {all_k.shape}"
+print("KVCache works!")
+</code></pre>
+
+<details>
+<summary>Hint</summary>
+<p>The simplest approach is to store a list (one entry per layer), where each entry is either <code>None</code> (no cache yet) or a tuple <code>(keys, values)</code>. On <code>update</code>, concatenate along the sequence dimension (dim=2).</p>
+</details>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">class KVCache:
+    def __init__(self, n_layers):
+        self.cache = [None] * n_layers
+
+    def update(self, layer_idx, new_keys, new_values):
+        if self.cache[layer_idx] is None:
+            self.cache[layer_idx] = (new_keys, new_values)
+        else:
+            prev_k, prev_v = self.cache[layer_idx]
+            self.cache[layer_idx] = (
+                t.cat([prev_k, new_keys], dim=2),
+                t.cat([prev_v, new_values], dim=2),
+            )
+        return self.cache[layer_idx]
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 4 ==================== -->
+<div class="exercise">
+<h3>Exercise 4 &mdash; Modify Attention to Use KV-Cache</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x1f534;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~25 min</p>
+
+<p>This is the core exercise. Modify the <code>Attention</code> class to optionally accept a KV-Cache. When a cache is provided:</p>
+<ol>
+  <li>Compute Q, K, V only for the <em>input</em> tokens (which during cached generation is just the new token)</li>
+  <li>Concatenate the new K, V with the cached K, V</li>
+  <li>Compute attention between the new Q and all (cached + new) K, V</li>
+  <li>No causal mask is needed during single-token generation (the new token is the last one and should attend to all previous tokens)</li>
+</ol>
+
+<pre><code class="language-python">class CachedAttention(nn.Module):
+    def __init__(self, d=64, n_head=4):
+        super().__init__()
+        self.n_head = n_head
+        self.d_head = d // n_head
+        self.QKV = nn.Linear(d, 3 * d, bias=False)
+        self.O = nn.Linear(d, d, bias=False)
+
+    def forward(self, x, kv_cache=None, layer_idx=None):
+        """
+        Args:
+            x: input tensor (batch, seq_len, d)
+            kv_cache: optional KVCache instance
+            layer_idx: which layer (required if kv_cache is not None)
+        Returns:
+            output tensor (batch, seq_len, d)
+        """
+        b, s, d = x.shape
+        q, k, v = self.QKV(x).chunk(3, dim=-1)
+        q = q.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+        k = k.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+        v = v.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+
+        # YOUR CODE HERE
+        # If kv_cache is provided:
+        #   1. Update the cache with new k, v and get full k, v
+        #   2. Compute attention (no causal mask needed for single-token input)
+        # If no cache:
+        #   Use the standard causal attention as before
+
+        pass
+</code></pre>
+
+<p>Test it:</p>
+<pre><code class="language-python"># Test that cached and uncached produce the same output for the prompt
+attn = CachedAttention(d=64, n_head=4).to(device)
+x = t.randn(1, 10, 64, device=device)
+
+# Uncached (full sequence with causal mask)
+out_full = attn(x)
+
+# Cached: first process all tokens to fill the cache, then verify
+cache = KVCache(n_layers=1)
+out_cached = attn(x, kv_cache=cache, layer_idx=0)
+
+# Both should produce the same output
+assert t.allclose(out_full, out_cached, atol=1e-5), "Cached prompt processing should match uncached!"
+print("Cached attention matches uncached for prompt processing!")
+
+# Now test single-token forward
+x_new = t.randn(1, 1, 64, device=device)
+out_new = attn(x_new, kv_cache=cache, layer_idx=0)
+assert out_new.shape == (1, 1, 64), f"Expected (1,1,64), got {out_new.shape}"
+print("Single-token cached forward works!")
+</code></pre>
+
+<details>
+<summary>Hint 1</summary>
+<p>When the cache is used, you still need to handle two cases: (a) the initial "prefill" pass where <code>s > 1</code> (processing the full prompt), and (b) subsequent "decode" passes where <code>s == 1</code> (generating one token at a time). During prefill, you still need the causal mask. During decode, no mask is needed since the single new token should attend to everything before it.</p>
+</details>
+
+<details>
+<summary>Hint 2</summary>
+<p>A clean way to handle this: always update the cache (if provided), then check if <code>q</code> has fewer positions than <code>k</code> (i.e., <code>q.shape[2] < k.shape[2]</code>). If so, you're in decode mode and no mask is needed. Otherwise, apply the usual causal mask.</p>
+</details>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">class CachedAttention(nn.Module):
+    def __init__(self, d=64, n_head=4):
+        super().__init__()
+        self.n_head = n_head
+        self.d_head = d // n_head
+        self.QKV = nn.Linear(d, 3 * d, bias=False)
+        self.O = nn.Linear(d, d, bias=False)
+
+    def forward(self, x, kv_cache=None, layer_idx=None):
+        b, s, d = x.shape
+        q, k, v = self.QKV(x).chunk(3, dim=-1)
+        q = q.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+        k = k.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+        v = v.view(b, s, self.n_head, self.d_head).transpose(1, 2)
+
+        if kv_cache is not None:
+            k, v = kv_cache.update(layer_idx, k, v)
+
+        # k, v now have shape (batch, n_head, full_seq, d_head)
+        # q has shape (batch, n_head, new_seq, d_head)
+        s_k = k.shape[2]
+        s_q = q.shape[2]
+
+        attn = (q @ k.transpose(-2, -1)) / (self.d_head ** 0.5)
+
+        # Only apply causal mask if processing more than one query token
+        if s_q > 1:
+            mask = t.triu(t.ones(s_q, s_k, device=x.device, dtype=t.bool), diagonal=s_k - s_q + 1)
+            attn = attn.masked_fill(mask, float('-inf'))
+
+        attn = attn.softmax(dim=-1)
+        out = attn @ v
+        out = out.transpose(1, 2).reshape(b, s_q, d)
+        return self.O(out)
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 5 ==================== -->
+<div class="exercise">
+<h3>Exercise 5 &mdash; Build the Cached Transformer</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x2b55; &nbsp;|&nbsp; ~15 min</p>
+
+<p>Now modify the <code>TransformerBlock</code> and <code>Transformer</code> classes to thread the KV-Cache through. The key changes are:</p>
+<ul>
+  <li><code>TransformerBlock.forward</code> takes an optional <code>kv_cache</code> and <code>layer_idx</code></li>
+  <li><code>Transformer.forward</code> takes an optional <code>kv_cache</code> and handles the position embedding correctly (using the position <em>offset</em> from the cache)</li>
+</ul>
+
+<pre><code class="language-python">class CachedTransformerBlock(nn.Module):
+    def __init__(self, d=64, n_head=4, exp=4):
+        super().__init__()
+        self.norm1 = RMSNorm(d)
+        self.attn = CachedAttention(d, n_head)
+        self.norm2 = RMSNorm(d)
+        self.mlp = MLP(d, exp)
+
+    def forward(self, x, kv_cache=None, layer_idx=None):
+        # YOUR CODE HERE
+        pass
+
+
+class CachedTransformer(nn.Module):
+    def __init__(self, vocab_size=256, n_ctx=128, d=64, n_head=4, n_layers=4, exp=4):
+        super().__init__()
+        self.tok_emb = nn.Embedding(vocab_size, d)
+        self.pos_emb = nn.Embedding(n_ctx, d)
+        self.blocks = nn.ModuleList(
+            [CachedTransformerBlock(d, n_head, exp) for _ in range(n_layers)]
+        )
+        self.norm = RMSNorm(d)
+        self.unembed = nn.Linear(d, vocab_size, bias=False)
+        self.n_layers = n_layers
+
+    def forward(self, tokens, kv_cache=None):
+        """
+        Args:
+            tokens: (batch, seq_len) token ids
+            kv_cache: optional KVCache. When provided, tokens are the NEW
+                      tokens only, and position embeddings must be offset.
+        """
+        b, s = tokens.shape
+
+        # YOUR CODE HERE
+        # Key: figure out the correct position offset from the cache
+        pass
+</code></pre>
+
+<details>
+<summary>Hint</summary>
+<p>To get the position offset: if the cache exists and layer 0 has been populated, the offset is the cached sequence length. You can get this from <code>kv_cache.cache[0][0].shape[2]</code> (the key tensor's sequence dimension), but only after the first layer has been processed. A simpler approach: track the offset in the cache itself, or compute it from the cache state <em>before</em> the forward pass starts. The offset is <code>0</code> on the first call (prefill) and grows as tokens are appended. Since during prefill the cache starts empty, the offset is <code>0</code>; during decode, the cache already contains previous keys, so the offset equals their sequence length minus the current input length (but since we haven't updated yet, it's simply the cached length).</p>
+</details>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">class CachedTransformerBlock(nn.Module):
+    def __init__(self, d=64, n_head=4, exp=4):
+        super().__init__()
+        self.norm1 = RMSNorm(d)
+        self.attn = CachedAttention(d, n_head)
+        self.norm2 = RMSNorm(d)
+        self.mlp = MLP(d, exp)
+
+    def forward(self, x, kv_cache=None, layer_idx=None):
+        x = x + self.attn(self.norm1(x), kv_cache=kv_cache, layer_idx=layer_idx)
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+
+class CachedTransformer(nn.Module):
+    def __init__(self, vocab_size=256, n_ctx=128, d=64, n_head=4, n_layers=4, exp=4):
+        super().__init__()
+        self.tok_emb = nn.Embedding(vocab_size, d)
+        self.pos_emb = nn.Embedding(n_ctx, d)
+        self.blocks = nn.ModuleList(
+            [CachedTransformerBlock(d, n_head, exp) for _ in range(n_layers)]
+        )
+        self.norm = RMSNorm(d)
+        self.unembed = nn.Linear(d, vocab_size, bias=False)
+        self.n_layers = n_layers
+
+    def forward(self, tokens, kv_cache=None):
+        b, s = tokens.shape
+
+        # Determine position offset from cache
+        if kv_cache is not None and kv_cache.cache[0] is not None:
+            offset = kv_cache.cache[0][0].shape[2]  # cached seq length
+        else:
+            offset = 0
+
+        positions = t.arange(offset, offset + s, device=tokens.device)
+        x = self.tok_emb(tokens) + self.pos_emb(positions)
+
+        for i, block in enumerate(self.blocks):
+            x = block(x, kv_cache=kv_cache, layer_idx=i)
+
+        x = self.norm(x)
+        return self.unembed(x)
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 6 ==================== -->
+<div class="exercise">
+<h3>Exercise 6 &mdash; Cached Generation</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~15 min</p>
+
+<p>Implement autoregressive generation using the KV-Cache. The generation has two phases:</p>
+<ol>
+  <li><strong>Prefill:</strong> Process the entire prompt at once (filling the cache)</li>
+  <li><strong>Decode:</strong> Generate tokens one at a time, using the cache</li>
+</ol>
+
+<pre><code class="language-python">@t.no_grad()
+def generate_cached(model, prompt, max_new_tokens=50, temperature=1.0):
+    """Generate tokens autoregressively WITH KV cache.
+
+    Args:
+        model: CachedTransformer
+        prompt: tensor of shape (batch, seq_len)
+        max_new_tokens: number of tokens to generate
+        temperature: sampling temperature
+
+    Returns:
+        tensor of shape (batch, seq_len + max_new_tokens)
+    """
+    # YOUR CODE HERE
+    # 1. Create a KVCache
+    # 2. Prefill: forward the prompt through the model (fills the cache)
+    # 3. Sample the first new token
+    # 4. Decode loop: feed one token at a time, using the cache
+    pass
+</code></pre>
+
+<details>
+<summary>Hint</summary>
+<p>During the prefill, pass the entire prompt and the cache. The cache gets populated. You get logits for all positions but only need the last one. Then, in the decode loop, pass only the single new token (shape <code>(batch, 1)</code>) with the same cache.</p>
+</details>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">@t.no_grad()
+def generate_cached(model, prompt, max_new_tokens=50, temperature=1.0):
+    tokens = prompt.clone()
+    cache = KVCache(n_layers=model.n_layers)
+
+    # Prefill: process the entire prompt
+    logits = model(tokens, kv_cache=cache)
+    next_logits = logits[:, -1, :] / temperature
+    next_token = t.multinomial(next_logits.softmax(dim=-1), 1)
+    tokens = t.cat([tokens, next_token], dim=1)
+
+    # Decode: one token at a time
+    for _ in range(max_new_tokens - 1):
+        logits = model(next_token, kv_cache=cache)
+        next_logits = logits[:, -1, :] / temperature
+        next_token = t.multinomial(next_logits.softmax(dim=-1), 1)
+        tokens = t.cat([tokens, next_token], dim=1)
+
+    return tokens
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 7 ==================== -->
+<div class="exercise">
+<h3>Exercise 7 &mdash; Verify Correctness and Benchmark</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x2b55;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x2b55; &nbsp;|&nbsp; ~15 min</p>
+
+<p>First, verify that the cached and uncached models produce identical logits for the same input. Then benchmark both approaches.</p>
+
+<pre><code class="language-python"># Step 1: Verify correctness
+# Create both models with the same weights
+model_naive = Transformer(vocab_size=256, n_ctx=128, d=64, n_head=4, n_layers=4).to(device)
+model_cached = CachedTransformer(vocab_size=256, n_ctx=128, d=64, n_head=4, n_layers=4).to(device)
+
+# Copy weights from naive to cached
+model_cached.load_state_dict(model_naive.state_dict())
+
+prompt = t.randint(0, 256, (1, 10), device=device)
+
+# YOUR CODE HERE
+# 1. Run naive model on the prompt, get logits at last position
+# 2. Run cached model on the prompt, get logits at last position
+# 3. Assert they match (use t.allclose with atol=1e-5)
+# 4. Feed one more token through both and check they still match
+
+# Step 2: Benchmark
+# YOUR CODE HERE
+# Time both generate_naive and generate_cached for max_new_tokens=100
+# Print the speedup factor
+</code></pre>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python"># Step 1: Verify correctness
+model_naive = Transformer(vocab_size=256, n_ctx=128, d=64, n_head=4, n_layers=4).to(device)
+model_cached = CachedTransformer(vocab_size=256, n_ctx=128, d=64, n_head=4, n_layers=4).to(device)
+model_cached.load_state_dict(model_naive.state_dict())
+
+prompt = t.randint(0, 256, (1, 10), device=device)
+
+logits_naive = model_naive(prompt)
+cache = KVCache(n_layers=4)
+logits_cached = model_cached(prompt, kv_cache=cache)
+
+assert t.allclose(logits_naive, logits_cached, atol=1e-5), "Logits don't match!"
+print("Prefill logits match!")
+
+# Check one more token
+next_tok = t.randint(0, 256, (1, 1), device=device)
+full_seq = t.cat([prompt, next_tok], dim=1)
+logits_naive_2 = model_naive(full_seq)[:, -1:]
+logits_cached_2 = model_cached(next_tok, kv_cache=cache)
+assert t.allclose(logits_naive_2, logits_cached_2, atol=1e-5), "Decode logits don't match!"
+print("Decode logits match!")
+
+# Step 2: Benchmark
+prompt = t.randint(0, 256, (1, 10), device=device)
+n_tokens = 100
+
+t.cuda.synchronize() if device == "cuda" else None
+start = time.time()
+for _ in range(5):
+    generate_naive(model_naive, prompt, max_new_tokens=n_tokens)
+    t.cuda.synchronize() if device == "cuda" else None
+time_naive = (time.time() - start) / 5
+
+t.cuda.synchronize() if device == "cuda" else None
+start = time.time()
+for _ in range(5):
+    generate_cached(model_cached, prompt, max_new_tokens=n_tokens)
+    t.cuda.synchronize() if device == "cuda" else None
+time_cached = (time.time() - start) / 5
+
+print(f"Naive: {time_naive:.3f}s | Cached: {time_cached:.3f}s | Speedup: {time_naive/time_cached:.1f}x")
+</code></pre>
+</details>
+</div>
+
+<div class="note">
+<strong>What to expect:</strong> The speedup depends on model size and sequence length. For this small model, you should see a 2&ndash;5x speedup. For larger models and longer sequences, KV-caching provides much more dramatic improvements (10&ndash;50x or more), since the naive approach recomputes all linear projections for the entire sequence at each step.
+</div>
+
+<h2>Summary</h2>
+
+<p>You've implemented KV-Caching for a decoder-only transformer. The key ideas were:</p>
+<ul>
+  <li>During autoregressive generation, K and V for previous tokens never change (due to the causal mask)</li>
+  <li>We cache these K, V tensors and only compute new ones for each generated token</li>
+  <li>This reduces per-step computation from \(O(n \cdot d)\) to \(O(d)\) for the linear layers</li>
+  <li>The position embedding must be offset correctly to account for cached tokens</li>
+</ul>
+
+<p>In <a href="ex4-far-kv-cache.html">Exercise 4</a>, we'll revisit KV-caching in the context of frame-autoregressive video models, where it becomes even more important since each "token" is a patch of a video frame.</p>
+
+<p class="nav-link"><a href="ex2-flow-matching-mnist.html">Next: Exercise 2 &mdash; Flow Matching on MNIST &rarr;</a></p>
+
+</body>
+</html>

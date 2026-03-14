@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exercise 3: Frame-Autoregressive Pong</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2em;
+    }
+    pre {
+      background: #f6f8fa;
+      padding: 1em;
+      border-radius: 5px;
+      overflow-x: auto;
+      margin: 1.5em 0;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+      background: #f6f8fa;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 85%;
+    }
+    pre code { background: none; padding: 0; font-size: 92%; }
+    h1, h2, h3, h4 {
+      margin-top: 1.5em;
+      margin-bottom: 0.5em;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    p { margin: 1em 0; }
+    a { color: #0366d6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { max-width: 100%; }
+    blockquote {
+      margin: 0; padding: 0 1em; color: #6a737d;
+      border-left: 0.25em solid #dfe2e5;
+    }
+    ul, ol { padding-left: 2em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    table, th, td { border: 1px solid #dfe2e5; }
+    th, td { padding: 6px 13px; text-align: left; }
+    tr:nth-child(even) { background-color: #f6f8fa; }
+    .exercise {
+      border: 2px solid #0366d6;
+      border-radius: 8px;
+      padding: 1.2em;
+      margin: 1.5em 0;
+      background: #f8fbff;
+    }
+    .exercise h3 { margin-top: 0; color: #0366d6; }
+    .exercise-meta {
+      font-size: 0.85em;
+      color: #586069;
+      margin-bottom: 0.8em;
+    }
+    details {
+      margin: 0.8em 0;
+      border: 1px solid #e1e4e8;
+      border-radius: 5px;
+      background: #fff;
+    }
+    details summary {
+      padding: 0.5em 1em;
+      cursor: pointer;
+      font-weight: 600;
+      color: #0366d6;
+      background: #f1f8ff;
+      border-radius: 5px;
+    }
+    details[open] summary {
+      border-bottom: 1px solid #e1e4e8;
+      border-radius: 5px 5px 0 0;
+    }
+    details > *:not(summary) { padding: 0 1em; }
+    .learning-obj {
+      background: #f0fff4;
+      border-left: 4px solid #28a745;
+      padding: 0.8em 1em;
+      margin: 1em 0;
+      border-radius: 0 5px 5px 0;
+    }
+    .note {
+      background: #fffbdd;
+      border-left: 4px solid #f9c513;
+      padding: 0.8em 1em;
+      margin: 1em 0;
+      border-radius: 0 5px 5px 0;
+    }
+    .nav-link {
+      display: inline-block;
+      margin: 0.5em 0;
+      padding: 0.4em 0.8em;
+      background: #f1f8ff;
+      border-radius: 5px;
+      border: 1px solid #0366d6;
+    }
+  </style>
+  <script type="text/javascript" id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+</head>
+<body>
+
+<p><a href="intro-far-video-models.html">&larr; Back to reading list</a></p>
+
+<h1>Exercise 3: Frame-Autoregressive Pong</h1>
+
+<div class="learning-obj">
+<strong>Learning objectives:</strong>
+<ul>
+  <li>Extend the image DiT to handle video (sequences of frames)</li>
+  <li>Implement block-causal attention for frame-autoregressive generation</li>
+  <li>Add action conditioning for controllable world models</li>
+  <li>Understand and implement diffusion forcing for video training</li>
+  <li>Generate Pong video sequences from a trained model</li>
+</ul>
+</div>
+
+<p><strong>Prerequisites:</strong> <a href="ex2-flow-matching-mnist.html">Exercise 2</a> (working MNIST flow matching model). Reference implementation: <a href="https://github.com/wendlerc/toy-wm/">wendlerc/toy-wm</a>.</p>
+
+<h2>Setup</h2>
+
+<pre><code class="language-python">import torch
+import torch as t
+from torch import nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, Dataset
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from IPython.display import HTML
+from tqdm import tqdm
+import numpy as np
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+</code></pre>
+
+<h2>From Images to Video: What Changes?</h2>
+
+<p>Going from MNIST images to Pong videos, almost everything stays the same&mdash;we just add a <strong>temporal dimension</strong>. Here's the mapping:</p>
+
+<table>
+  <tr><th>Component</th><th>Image (Ex. 2)</th><th>Video (Ex. 3)</th></tr>
+  <tr><td>Input shape</td><td><code>(B, C, H, W)</code></td><td><code>(B, T, C, H, W)</code></td></tr>
+  <tr><td>Patch tokens</td><td><code>(B, h*w, d)</code></td><td><code>(B, T*h*w, d)</code></td></tr>
+  <tr><td>Attention</td><td>Bidirectional (all-to-all)</td><td>Block-causal (frame \(t\) attends to frames \(\le t\))</td></tr>
+  <tr><td>Conditioning</td><td>Class label</td><td>Action per frame</td></tr>
+  <tr><td>Training</td><td>One noise level per image</td><td>Different noise levels per frame (diffusion forcing)</td></tr>
+</table>
+
+<h2>Part A: Dataset</h2>
+
+<!-- ==================== EXERCISE 1 ==================== -->
+<div class="exercise">
+<h3>Exercise 1 &mdash; Load and Visualize the Pong Dataset</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x2b55;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x2b55;&#x2b55; &nbsp;|&nbsp; ~15 min</p>
+
+<p>Download the Pong dataset from HuggingFace and create a DataLoader. The dataset contains sequences of frames with corresponding actions.</p>
+
+<pre><code class="language-python">from huggingface_hub import hf_hub_download
+import os
+
+# Download dataset
+os.makedirs("datasets/pong1M", exist_ok=True)
+for fname in ["frames.npy", "actions.npy"]:
+    hf_hub_download(repo_id="wendlerc/pong1M", filename=fname,
+                    repo_type="dataset", local_dir="datasets/pong1M")
+
+# Load raw data
+all_frames = np.load("datasets/pong1M/frames.npy")   # (N, C, H, W) uint8
+all_actions = np.load("datasets/pong1M/actions.npy")  # (N,) int
+print(f"Frames: {all_frames.shape}, Actions: {all_actions.shape}")
+print(f"Action values: {np.unique(all_actions)}")
+</code></pre>
+
+<p>Now create a Dataset that returns sequences of consecutive frames:</p>
+
+<pre><code class="language-python">class PongDataset(Dataset):
+    """Dataset of Pong video sequences.
+
+    Each item is a sequence of `seq_len` consecutive frames and their actions.
+    Actions: 0=dummy (for CFG), 1=noop, 2=up, 3=down
+    """
+    def __init__(self, frames, actions, seq_len=17, fps=5):
+        super().__init__()
+        # YOUR CODE HERE
+        # 1. Reshape frames into episodes of (fps*duration + 1) consecutive frames
+        #    (the +1 is because we need seq_len frames starting from any position)
+        # 2. Normalize frames to [-1, 1]
+        # 3. Store sequences of length seq_len
+
+    def __len__(self):
+        # YOUR CODE HERE
+        pass
+
+    def __getitem__(self, idx):
+        # YOUR CODE HERE
+        # Return (frames, actions) where:
+        #   frames: (seq_len, C, H, W) float tensor in [-1, 1]
+        #   actions: (seq_len,) long tensor
+        pass
+</code></pre>
+
+<p>Visualize a sample sequence:</p>
+<pre><code class="language-python"># YOUR CODE HERE
+# Display the first 8 frames of a sequence as a row of images
+# Add the action label above each frame
+</code></pre>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">class PongDataset(Dataset):
+    def __init__(self, frames, actions, seq_len=17, fps=5):
+        super().__init__()
+        self.seq_len = seq_len
+        # Reshape into episodes (assuming data is sequential)
+        ep_len = fps * 60 + 1  # 5 fps * 60 seconds + 1
+        n_episodes = len(frames) // ep_len
+        frames = frames[:n_episodes * ep_len].reshape(n_episodes, ep_len, *frames.shape[1:])
+        actions = actions[:n_episodes * ep_len].reshape(n_episodes, ep_len)
+
+        # Normalize to [-1, 1]
+        self.frames = torch.tensor(frames, dtype=torch.float32) / 127.5 - 1
+        self.actions = torch.tensor(actions, dtype=torch.long)
+        self.n_episodes = n_episodes
+        self.seqs_per_episode = ep_len - seq_len + 1
+
+    def __len__(self):
+        return self.n_episodes * self.seqs_per_episode
+
+    def __getitem__(self, idx):
+        ep_idx = idx // self.seqs_per_episode
+        frame_idx = idx % self.seqs_per_episode
+        frames = self.frames[ep_idx, frame_idx:frame_idx + self.seq_len]
+        actions = self.actions[ep_idx, frame_idx:frame_idx + self.seq_len]
+        return frames, actions
+
+dataset = PongDataset(all_frames, all_actions, seq_len=17)
+train_loader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=2)
+
+# Visualize
+frames, actions = dataset[0]
+action_names = {0: "dummy", 1: "noop", 2: "up", 3: "down"}
+fig, axes = plt.subplots(1, 8, figsize=(16, 2))
+for i in range(8):
+    img = (frames[i].permute(1, 2, 0).numpy() + 1) / 2
+    axes[i].imshow(img.clip(0, 1))
+    axes[i].set_title(action_names.get(actions[i].item(), "?"), fontsize=10)
+    axes[i].axis('off')
+plt.suptitle("Pong sequence sample")
+plt.tight_layout()
+plt.show()
+</code></pre>
+</details>
+</div>
+
+<h2>Part B: Video Patch Embedding</h2>
+
+<!-- ==================== EXERCISE 2 ==================== -->
+<div class="exercise">
+<h3>Exercise 2 &mdash; Extend Patch/UnPatch for Video</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~20 min</p>
+
+<p>Modify the Patch and UnPatch modules to handle 5D video tensors <code>(B, T, C, H, W)</code>. The simplest approach: reshape <code>(B, T, C, H, W)</code> to <code>(B*T, C, H, W)</code>, apply the image patchifier, then reshape back to <code>(B, T*n_patches, d)</code>.</p>
+
+<pre><code class="language-python">class VideoPatch(nn.Module):
+    """Patchify video frames into a single token sequence."""
+    def __init__(self, patch_size=4, in_channels=3, d=64):
+        super().__init__()
+        self.patch_size = patch_size
+        self.d = d
+        # YOUR CODE HERE
+        # Same conv as image Patch
+
+    def forward(self, x):
+        """
+        Args:
+            x: (B, T, C, H, W) video tensor
+        Returns:
+            (B, T * n_patches_per_frame, d) token sequence
+        """
+        # YOUR CODE HERE
+        pass
+
+    def n_patches_per_frame(self, h, w):
+        return (h // self.patch_size) * (w // self.patch_size)
+
+
+class VideoUnPatch(nn.Module):
+    """Convert token sequence back to video frames."""
+    def __init__(self, patch_size=4, d=64, out_channels=3):
+        super().__init__()
+        self.patch_size = patch_size
+        self.out_channels = out_channels
+        # YOUR CODE HERE
+
+    def forward(self, x, n_frames):
+        """
+        Args:
+            x: (B, T * n_patches_per_frame, d) token sequence
+            n_frames: number of frames T
+        Returns:
+            (B, T, C, H, W) video tensor
+        """
+        # YOUR CODE HERE
+        pass
+</code></pre>
+
+<p>Test:</p>
+<pre><code class="language-python">vpatch = VideoPatch(patch_size=4, in_channels=3, d=64)
+vunpatch = VideoUnPatch(patch_size=4, d=64, out_channels=3)
+
+video = t.randn(2, 5, 3, 24, 24)  # 2 videos, 5 frames, 3 channels, 24x24
+tokens = vpatch(video)
+n_patches = vpatch.n_patches_per_frame(24, 24)
+assert tokens.shape == (2, 5 * n_patches, 64), f"Got {tokens.shape}"
+reconstructed = vunpatch(tokens, n_frames=5)
+assert reconstructed.shape == (2, 5, 3, 24, 24), f"Got {reconstructed.shape}"
+print(f"Video {video.shape} -> Tokens {tokens.shape} -> Video {reconstructed.shape}")
+</code></pre>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">class VideoPatch(nn.Module):
+    def __init__(self, patch_size=4, in_channels=3, d=64):
+        super().__init__()
+        self.patch_size = patch_size
+        self.d = d
+        self.conv = nn.Conv2d(in_channels, d, kernel_size=5, padding=2, stride=patch_size)
+
+    def forward(self, x):
+        B, T, C, H, W = x.shape
+        x = x.reshape(B * T, C, H, W)
+        x = self.conv(x)                    # (B*T, d, h, w)
+        x = x.permute(0, 2, 3, 1)          # (B*T, h, w, d)
+        x = x.reshape(B * T, -1, self.d)   # (B*T, n_patches, d)
+        x = x.reshape(B, T * x.shape[1], self.d)  # (B, T*n_patches, d)
+        return x
+
+    def n_patches_per_frame(self, h, w):
+        return (h // self.patch_size) * (w // self.patch_size)
+
+
+class VideoUnPatch(nn.Module):
+    def __init__(self, patch_size=4, d=64, out_channels=3):
+        super().__init__()
+        self.patch_size = patch_size
+        self.out_channels = out_channels
+        self.up = nn.Linear(d, patch_size ** 2 * out_channels)
+
+    def forward(self, x, n_frames):
+        B, S, d = x.shape
+        n_patches_per_frame = S // n_frames
+        x = x.reshape(B * n_frames, n_patches_per_frame, d)
+        x = self.up(x)
+        w = int(n_patches_per_frame ** 0.5)
+        h = w
+        ps = self.patch_size
+        c = self.out_channels
+        x = x.reshape(B * n_frames, h, w, c, ps, ps)
+        x = x.permute(0, 3, 1, 4, 2, 5)
+        x = x.reshape(B * n_frames, c, h * ps, w * ps)
+        x = x.reshape(B, n_frames, c, h * ps, w * ps)
+        return x
+</code></pre>
+</details>
+</div>
+
+<h2>Part C: Block-Causal Attention</h2>
+
+<p>In the image model, every patch attends to every other patch. For video, we need <strong>block-causal attention</strong>: patches in frame \(t\) can attend to all patches in frames \(\le t\), but not to future frames. This enables autoregressive generation frame-by-frame.</p>
+
+<!-- ==================== EXERCISE 3 ==================== -->
+<div class="exercise">
+<h3>Exercise 3 &mdash; Implement Block-Causal Attention Mask</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x1f534;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~20 min</p>
+
+<p>Create a function that generates a block-causal mask. If each frame has \(P\) patches and there are \(T\) frames, the total sequence length is \(S = T \times P\). Token \(i\) belongs to frame \(\lfloor i/P \rfloor\). Token \(i\) can attend to token \(j\) if and only if \(\lfloor j/P \rfloor \le \lfloor i/P \rfloor\).</p>
+
+<pre><code class="language-python">def make_block_causal_mask(n_frames, patches_per_frame, device="cpu"):
+    """Create a block-causal attention mask.
+
+    Args:
+        n_frames: number of frames T
+        patches_per_frame: number of patches per frame P
+        device: torch device
+
+    Returns:
+        Boolean mask of shape (T*P, T*P) where True means BLOCKED (masked out)
+    """
+    # YOUR CODE HERE
+    pass
+</code></pre>
+
+<p>Test and visualize:</p>
+<pre><code class="language-python">mask = make_block_causal_mask(4, 9)  # 4 frames, 9 patches each
+plt.figure(figsize=(6, 6))
+plt.imshow(~mask.cpu(), cmap='gray')
+plt.xlabel("Key position")
+plt.ylabel("Query position")
+plt.title("Block-causal mask (white = attend)")
+# Add grid lines at frame boundaries
+for i in range(1, 4):
+    plt.axhline(y=i*9-0.5, color='red', linewidth=0.5)
+    plt.axvline(x=i*9-0.5, color='red', linewidth=0.5)
+plt.show()
+</code></pre>
+
+<details>
+<summary>Hint</summary>
+<p>One approach: create the frame index for each token position using integer division, then compare: <code>frame_idx_query >= frame_idx_key</code> gives the allowed positions.</p>
+</details>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">def make_block_causal_mask(n_frames, patches_per_frame, device="cpu"):
+    total = n_frames * patches_per_frame
+    # Frame index for each position
+    frame_idx = t.arange(total, device=device) // patches_per_frame
+    # Token i can attend to token j if frame[j] <= frame[i]
+    # Mask is True where attention is BLOCKED
+    mask = frame_idx[None, :] > frame_idx[:, None]
+    return mask
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 4 ==================== -->
+<div class="exercise">
+<h3>Exercise 4 &mdash; Implement Causal Video Attention</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~15 min</p>
+
+<p>Modify the Attention module to accept an optional mask parameter for block-causal masking.</p>
+
+<pre><code class="language-python">class CausalVideoAttention(nn.Module):
+    def __init__(self, d=64, n_head=4):
+        super().__init__()
+        self.n_head = n_head
+        self.d = d
+        self.d_head = d // n_head
+        self.QKV = nn.Linear(d, 3 * d, bias=False)
+        self.O = nn.Linear(d, d, bias=False)
+        self.normq = RMSNorm(self.d_head)
+        self.normk = RMSNorm(self.d_head)
+
+    def forward(self, x, mask=None):
+        """
+        Args:
+            x: (B, S, d) where S = T * patches_per_frame
+            mask: (S, S) bool tensor, True = blocked
+        Returns:
+            (B, S, d)
+        """
+        # YOUR CODE HERE
+        # Same as the image Attention but apply the mask before softmax
+        pass
+</code></pre>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">class CausalVideoAttention(nn.Module):
+    def __init__(self, d=64, n_head=4):
+        super().__init__()
+        self.n_head = n_head
+        self.d = d
+        self.d_head = d // n_head
+        self.QKV = nn.Linear(d, 3 * d, bias=False)
+        self.O = nn.Linear(d, d, bias=False)
+        self.normq = RMSNorm(self.d_head)
+        self.normk = RMSNorm(self.d_head)
+
+    def forward(self, x, mask=None):
+        b, s, d = x.shape
+        q, k, v = self.QKV(x).chunk(3, dim=-1)
+        q = q.reshape(b, s, self.n_head, self.d_head)
+        k = k.reshape(b, s, self.n_head, self.d_head)
+        v = v.reshape(b, s, self.n_head, self.d_head)
+        q = self.normq(q)
+        k = self.normk(k)
+        attn = q.permute(0, 2, 1, 3) @ k.permute(0, 2, 3, 1)
+        if mask is not None:
+            attn = attn.masked_fill(mask[None, None, :, :], float('-inf'))
+        attn = attn.softmax(dim=-1)
+        z = attn @ v.permute(0, 2, 1, 3)
+        z = z.permute(0, 2, 1, 3).reshape(b, s, self.d)
+        return self.O(z)
+</code></pre>
+</details>
+</div>
+
+<h2>Part D: The Causal DiT for Video</h2>
+
+<!-- ==================== EXERCISE 5 ==================== -->
+<div class="exercise">
+<h3>Exercise 5 &mdash; Build the Causal Video DiT</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x1f534;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~30 min</p>
+
+<p>Assemble the full video DiT. Key differences from the image version:</p>
+<ul>
+  <li><strong>Input:</strong> <code>(B, T, C, H, W)</code> video with per-frame timesteps and actions</li>
+  <li><strong>Conditioning:</strong> each frame gets its own timestep and action embedding. The conditioning is applied <em>per-token</em> (each patch inherits its frame's conditioning)</li>
+  <li><strong>Positional embedding:</strong> spatial positional embedding (same for each frame) tiled across frames</li>
+  <li><strong>Attention mask:</strong> block-causal</li>
+</ul>
+
+<pre><code class="language-python">class CausalDiT(nn.Module):
+    def __init__(self, h=24, w=24, n_actions=4, in_channels=3,
+                 patch_size=4, n_blocks=8, d=64, n_head=4, exp=2, T=1000):
+        super().__init__()
+        self.T = T
+        self.patches_per_frame = (h // patch_size) * (w // patch_size)
+        # YOUR CODE HERE
+        # - VideoPatch and VideoUnPatch
+        # - Spatial positional embedding: (1, patches_per_frame, d)
+        # - NumEmbedding for timesteps
+        # - nn.Embedding for actions (n_actions entries)
+        # - SiLU activation
+        # - DiT blocks (use CausalVideoAttention in the blocks)
+        # - Final norm + modulation + unpatch
+
+    def forward(self, x, actions, ts):
+        """
+        Args:
+            x: (B, T_frames, C, H, W) noisy video
+            actions: (B, T_frames) action indices per frame
+            ts: (B, T_frames) float timesteps per frame (each frame can have
+                a different noise level - this is diffusion forcing!)
+        Returns:
+            (B, T_frames, C, H, W) predicted velocity per frame
+        """
+        # YOUR CODE HERE
+        # 1. Patchify: (B, T*P, d)
+        # 2. Add positional embedding (tile spatial PE across frames)
+        # 3. Build per-token conditioning:
+        #    - Compute per-frame cond = SiLU(timestep_emb + action_emb)  -> (B, T, d)
+        #    - Repeat for each patch: (B, T, d) -> (B, T*P, d)
+        # 4. Build block-causal mask
+        # 5. Run through DiT blocks (pass mask to attention)
+        # 6. Final modulated norm + unpatch
+        pass
+</code></pre>
+
+<details>
+<summary>Hint</summary>
+<p>For the per-token conditioning: if <code>cond</code> has shape <code>(B, T, d)</code>, you can repeat it for each patch using:
+<code>cond = cond.unsqueeze(2).expand(-1, -1, self.patches_per_frame, -1).reshape(B, T * self.patches_per_frame, d)</code>. Alternatively: <code>cond.repeat_interleave(self.patches_per_frame, dim=1)</code>.</p>
+</details>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">class CausalDiTBlock(nn.Module):
+    """DiT block with causal video attention."""
+    def __init__(self, d=64, n_head=4, exp=2):
+        super().__init__()
+        self.norm1 = RMSNorm(d)
+        self.attn = CausalVideoAttention(d, n_head)
+        self.norm2 = RMSNorm(d)
+        self.mlp = MLP(d, exp)
+        self.modulate = nn.Linear(d, 6 * d)
+
+    def forward(self, x, c, mask=None):
+        scale1, bias1, gate1, scale2, bias2, gate2 = self.modulate(c).chunk(6, dim=-1)
+        residual = x
+        x = self.norm1(x) * (1 + scale1) + bias1
+        x = self.attn(x, mask=mask) * gate1
+        x = residual + x
+        residual = x
+        x = self.norm2(x) * (1 + scale2) + bias2
+        x = self.mlp(x) * gate2
+        x = residual + x
+        return x
+
+
+class CausalDiT(nn.Module):
+    def __init__(self, h=24, w=24, n_actions=4, in_channels=3,
+                 patch_size=4, n_blocks=8, d=64, n_head=4, exp=2, T=1000):
+        super().__init__()
+        self.T = T
+        self.patches_per_frame = (h // patch_size) * (w // patch_size)
+        self.patch = VideoPatch(patch_size, in_channels, d)
+        self.unpatch = VideoUnPatch(patch_size, d, in_channels)
+        self.pe = nn.Parameter(t.randn(1, self.patches_per_frame, d) * d ** -0.5)
+        self.te = NumEmbedding(T, d)
+        self.ae = nn.Embedding(n_actions, d)
+        self.act = nn.SiLU()
+        self.blocks = nn.ModuleList([CausalDiTBlock(d, n_head, exp) for _ in range(n_blocks)])
+        self.norm = RMSNorm(d)
+        self.mod_final = nn.Linear(d, 2 * d)
+        self.in_channels = in_channels
+
+    def forward(self, x, actions, ts):
+        B, T_frames, C, H, W = x.shape
+        P = self.patches_per_frame
+
+        # Patchify
+        tokens = self.patch(x)  # (B, T_frames*P, d)
+
+        # Add spatial positional embedding (tiled across frames)
+        pe = self.pe.repeat(1, T_frames, 1)  # (1, T_frames*P, d)
+        tokens = tokens + pe
+
+        # Per-frame conditioning
+        ts_int = t.minimum((ts * self.T).long(), t.tensor(self.T - 1, device=ts.device))
+        cond = self.act(self.te(ts_int) + self.ae(actions))  # (B, T_frames, d)
+        # Expand to per-token: (B, T_frames*P, d)
+        cond = cond.repeat_interleave(P, dim=1)
+
+        # Block-causal mask
+        mask = make_block_causal_mask(T_frames, P, device=x.device)
+
+        # DiT blocks
+        for block in self.blocks:
+            tokens = block(tokens, cond, mask=mask)
+
+        # Final modulated norm
+        scale, bias = self.mod_final(cond).chunk(2, dim=-1)
+        tokens = self.norm(tokens) * (1 + scale) + bias
+
+        # Unpatch
+        output = self.unpatch(tokens, n_frames=T_frames)
+        return output
+
+    @property
+    def device(self):
+        return self.pe.device
+</code></pre>
+</details>
+</div>
+
+<h2>Part E: Diffusion Forcing Training</h2>
+
+<p>In standard flow matching (Exercise 2), each image gets one noise level \(t\). For <strong>diffusion forcing</strong>, each frame in the video gets an <em>independent</em> noise level. This is crucial because during autoregressive generation, earlier frames will be cleaner than later ones.</p>
+
+<!-- ==================== EXERCISE 6 ==================== -->
+<div class="exercise">
+<h3>Exercise 6 &mdash; Implement the Diffusion Forcing Loss</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~15 min</p>
+
+<p>Like flow matching, but with per-frame timesteps. Also apply action dropout (20%) for CFG.</p>
+
+<pre><code class="language-python">def diffusion_forcing_loss(model, frames, actions, action_dropout=0.2):
+    """Compute diffusion forcing loss for video.
+
+    Args:
+        model: CausalDiT
+        frames: (B, T, C, H, W) clean video frames
+        actions: (B, T) action indices
+        action_dropout: probability of dropping action (setting to 0)
+
+    Returns:
+        scalar loss
+    """
+    # YOUR CODE HERE
+    # 1. Sample per-frame timesteps: ts of shape (B, T) ~ U(0, 1)
+    # 2. Sample noise z ~ N(0, I) same shape as frames
+    # 3. Compute per-frame noisy frames: x_t = frames - ts * (frames - z)
+    #    (need to broadcast ts to match spatial dims)
+    # 4. Apply action dropout
+    # 5. Predict velocity, compute MSE loss
+    pass
+</code></pre>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">def diffusion_forcing_loss(model, frames, actions, action_dropout=0.2):
+    B, T_frames, C, H, W = frames.shape
+    ts = t.rand(B, T_frames, device=frames.device, dtype=frames.dtype)
+    z = t.randn_like(frames)
+    v_true = frames - z
+    # Broadcast ts to spatial dims: (B, T, 1, 1, 1)
+    x_t = frames - ts[:, :, None, None, None] * v_true
+
+    # Action dropout for CFG
+    actions = actions.clone()
+    drop_mask = t.rand(B, T_frames, device=frames.device) < action_dropout
+    actions[drop_mask] = 0
+
+    v_pred = model(x_t, actions, ts)
+    loss = F.mse_loss(v_pred, v_true)
+    return loss
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 7 ==================== -->
+<div class="exercise">
+<h3>Exercise 7 &mdash; Train the Pong Model</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x2b55; &nbsp;|&nbsp; ~15 min (+ training time)</p>
+
+<p>Write the training loop. This uses a similar structure to MNIST but with the diffusion forcing loss.</p>
+
+<pre><code class="language-python">model = CausalDiT(h=24, w=24, n_actions=4, in_channels=3,
+                   patch_size=4, n_blocks=8, d=64, n_head=4).to(device)
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95))
+
+n_params = sum(p.numel() for p in model.parameters())
+print(f"Model parameters: {n_params:,}")
+
+# YOUR CODE HERE
+# Training loop:
+# - Train for ~2500 steps (or more for better quality)
+# - For each batch: compute diffusion_forcing_loss, backprop, clip grads, step
+# - Log loss every 100 steps
+# - Generate sample videos every 500 steps
+</code></pre>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">model = CausalDiT(h=24, w=24, n_actions=4, in_channels=3,
+                   patch_size=4, n_blocks=8, d=64, n_head=4).to(device)
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95))
+
+n_steps = 2500
+step = 0
+running_loss = 0
+train_iter = iter(train_loader)
+
+pbar = tqdm(range(n_steps))
+for step in pbar:
+    try:
+        frames, actions = next(train_iter)
+    except StopIteration:
+        train_iter = iter(train_loader)
+        frames, actions = next(train_iter)
+
+    frames = frames.to(device)
+    actions = actions.to(device)
+
+    loss = diffusion_forcing_loss(model, frames, actions)
+    optimizer.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
+    optimizer.step()
+
+    running_loss += loss.item()
+    if (step + 1) % 100 == 0:
+        pbar.set_postfix(loss=running_loss / 100)
+        running_loss = 0
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 8 ==================== -->
+<div class="exercise">
+<h3>Exercise 8 &mdash; Implement Video Sampling</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x1f534;&#x1f534;&#x1f534;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x1f535;&#x1f535; &nbsp;|&nbsp; ~25 min</p>
+
+<p>Video sampling is done <strong>frame-by-frame</strong> (autoregressively). For each new frame:</p>
+<ol>
+  <li>Start with noise for the new frame</li>
+  <li>Concatenate with all previously generated (clean) frames</li>
+  <li>Run denoising steps: the model sees all frames, but only the last frame's noise level changes from 1&rarr;0</li>
+  <li>After denoising, the new frame is "clean" and becomes context for the next frame</li>
+</ol>
+
+<pre><code class="language-python">@t.no_grad()
+def sample_video(model, first_frame, actions, n_denoise_steps=30, cfg=0):
+    """Generate video autoregressively, one frame at a time.
+
+    Args:
+        model: trained CausalDiT
+        first_frame: (B, 1, C, H, W) the initial context frame
+        actions: (B, total_frames) action sequence (including first frame)
+        n_denoise_steps: Euler steps per frame
+        cfg: classifier-free guidance strength
+
+    Returns:
+        (B, total_frames, C, H, W) generated video
+    """
+    B = first_frame.shape[0]
+    total_frames = actions.shape[1]
+    C, H, W = first_frame.shape[2:]
+
+    # Start with the given first frame
+    video = first_frame.clone()  # (B, 1, C, H, W)
+
+    for frame_idx in range(1, total_frames):
+        # YOUR CODE HERE
+        # 1. Sample noise for the new frame: z ~ N(0, I)
+        # 2. Set up timesteps: all previous frames at t=0, new frame starts at t=1
+        # 3. Run n_denoise_steps Euler steps:
+        #    a. Concatenate clean frames + current noisy frame
+        #    b. Set ts for all frames (0 for clean, current t for new)
+        #    c. Predict velocity (apply CFG if needed)
+        #    d. Only update the new frame: z += (t_i - t_{i+1}) * v_pred[:, -1:]
+        # 4. Append denoised frame to video
+        pass
+
+    return video
+</code></pre>
+
+<details>
+<summary>Hint</summary>
+<p>During each Euler step, you forward the <em>entire</em> video (clean frames + noisy new frame) through the model. The model predicts velocities for all frames, but you only use the velocity for the <em>last</em> frame (the one being denoised). The timesteps tensor should be <code>0</code> for all clean frames and the current denoising timestep for the last frame.</p>
+</details>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">@t.no_grad()
+def sample_video(model, first_frame, actions, n_denoise_steps=30, cfg=0):
+    B = first_frame.shape[0]
+    total_frames = actions.shape[1]
+    C, H, W = first_frame.shape[2:]
+
+    video = first_frame.clone()
+
+    for frame_idx in range(1, total_frames):
+        z = t.randn(B, 1, C, H, W, device=first_frame.device, dtype=first_frame.dtype)
+
+        # Timestep schedule for denoising this frame
+        denoise_ts = t.linspace(1, 0, n_denoise_steps + 1, device=first_frame.device)
+        denoise_ts = 3 * denoise_ts / (2 * denoise_ts + 1)
+
+        for step_idx in range(n_denoise_steps):
+            current_video = t.cat([video, z], dim=1)  # (B, frame_idx+1, C, H, W)
+            n_ctx = current_video.shape[1]
+
+            # Timesteps: 0 for clean frames, current t for new frame
+            ts = t.zeros(B, n_ctx, device=first_frame.device)
+            ts[:, -1] = denoise_ts[step_idx]
+
+            # Actions for context + new frame
+            act = actions[:, :n_ctx]
+
+            v_pred = model(current_video, act, ts)
+            if cfg > 0:
+                v_uncond = model(current_video, act * 0, ts)
+                v_pred = v_uncond + cfg * (v_pred - v_uncond)
+
+            # Only update the new (last) frame
+            dt = denoise_ts[step_idx] - denoise_ts[step_idx + 1]
+            z = z + dt * v_pred[:, -1:]
+
+        video = t.cat([video, z], dim=1)
+
+    return video
+</code></pre>
+</details>
+</div>
+
+<!-- ==================== EXERCISE 9 ==================== -->
+<div class="exercise">
+<h3>Exercise 9 &mdash; Visualize Generated Pong Videos</h3>
+<p class="exercise-meta">Difficulty: &#x1f534;&#x2b55;&#x2b55;&#x2b55;&#x2b55; &nbsp;|&nbsp; Importance: &#x1f535;&#x1f535;&#x1f535;&#x2b55;&#x2b55; &nbsp;|&nbsp; ~10 min</p>
+
+<p>Generate and visualize Pong videos. Use the first frame from the dataset as context.</p>
+
+<pre><code class="language-python"># YOUR CODE HERE
+# 1. Get a sample from the dataset
+# 2. Use the first frame as context
+# 3. Generate a video with sample_video()
+# 4. Display as an animation or a grid of frames
+
+# Helper to create an animation:
+def show_video(frames, fps=5):
+    """Display a video tensor (T, C, H, W) as an animation."""
+    frames_np = ((frames.cpu().clamp(-1, 1) + 1) / 2).permute(0, 2, 3, 1).numpy()
+    fig, ax = plt.subplots()
+    im = ax.imshow(frames_np[0].clip(0, 1))
+    ax.axis('off')
+    def update(i):
+        im.set_data(frames_np[i].clip(0, 1))
+        return [im]
+    ani = animation.FuncAnimation(fig, update, frames=len(frames_np), interval=1000//fps)
+    plt.close()
+    return HTML(ani.to_jshtml())
+</code></pre>
+
+<details>
+<summary>Solution</summary>
+<pre><code class="language-python">model.eval()
+frames, actions = dataset[0]
+first_frame = frames[:1].unsqueeze(0).to(device)  # (1, 1, C, H, W)
+act_seq = actions.unsqueeze(0).to(device)          # (1, T)
+
+generated = sample_video(model, first_frame, act_seq, n_denoise_steps=30, cfg=2.0)
+show_video(generated[0])  # Display first sample
+</code></pre>
+</details>
+</div>
+
+<h2>Summary</h2>
+
+<p>You've built a frame-autoregressive video model for Pong! The key extensions from the image model were:</p>
+<ul>
+  <li><strong>Temporal dimension:</strong> Video tensors <code>(B, T, C, H, W)</code> flattened into longer token sequences</li>
+  <li><strong>Block-causal attention:</strong> Each frame attends to itself and all previous frames</li>
+  <li><strong>Per-frame conditioning:</strong> Action and timestep embeddings applied per-frame</li>
+  <li><strong>Diffusion forcing:</strong> Independent noise levels per frame during training</li>
+  <li><strong>Autoregressive sampling:</strong> Generating one frame at a time, using clean past frames as context</li>
+</ul>
+
+<p>In <a href="ex4-far-kv-cache.html">Exercise 4</a>, we'll add KV-caching to make this inference process much faster.</p>
+
+<p><a class="nav-link" href="ex2-flow-matching-mnist.html">&larr; Previous: Exercise 2</a> &nbsp; <a class="nav-link" href="ex4-far-kv-cache.html">Next: Exercise 4 &rarr;</a></p>
+
+</body>
+</html>
