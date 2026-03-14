@@ -360,20 +360,20 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
             # Store in cache and attend to everything
             kv_cache.append(layer_idx, k, v)
             k_full, v_full = kv_cache.get_cached_kv(layer_idx)
-            attn = (q @ k_full.transpose(-2, -1)) / (self.d_head ** 0.5)
+            attn = q @ k_full.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
             out = attn @ v_full
 
         elif kv_cache is not None and cache_mode == "denoise":
             # Extend with cache but don't store
             k_full, v_full = kv_cache.get_and_extend(layer_idx, k, v)
-            attn = (q @ k_full.transpose(-2, -1)) / (self.d_head ** 0.5)
+            attn = q @ k_full.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
             out = attn @ v_full
 
         else:
             # Standard attention with optional mask
-            attn = (q @ k.transpose(-2, -1)) / (self.d_head ** 0.5)
+            attn = q @ k.transpose(-2, -1)
             if mask is not None:
                 attn = attn.masked_fill(mask[None, None, :, :], float('-inf'))
             attn = attn.softmax(dim=-1)
