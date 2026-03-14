@@ -76,6 +76,27 @@
     ul, ol {
       padding-left: 2em;
     }
+    .tag {
+      display: inline-block;
+      font-size: 0.75em;
+      font-weight: 600;
+      padding: 0.1em 0.5em;
+      border-radius: 3px;
+      vertical-align: middle;
+      margin-right: 0.3em;
+    }
+    .tag-read {
+      background-color: #dcffe4;
+      color: #22863a;
+    }
+    .tag-skim {
+      background-color: #fff8c5;
+      color: #735c0f;
+    }
+    .tag-bonus {
+      background-color: #f1f0ff;
+      color: #6f42c1;
+    }
     /* Syntax highlighting styles */
     .highlight .c, .highlight .cm, .highlight .c1, .highlight .cs { color: #6a737d; } /* Comment */
     .highlight .k, .highlight .kc, .highlight .kd, .highlight .kn, .highlight .kp, .highlight .kr, .highlight .kt { color: #d73a49; } /* Keyword */
@@ -96,6 +117,8 @@
 
 <p>A reading list and collection of resources for building up to frame-autoregressive video generation and world models. The progression goes: autoregressive transformers, then flow matching for images, then flow matching for video, and finally combining both with KV caching for efficient frame-autoregressive generation.</p>
 
+<p><span class="tag tag-read">read</span> essential reading &nbsp; <span class="tag tag-skim">skim</span> worth skimming &nbsp; <span class="tag tag-bonus">bonus</span> for deeper exploration</p>
+
 <h2 id="1-decoder-only-transformer--kv-caching">1. Decoder-only transformer + KV caching</h2>
 
 <p>Build a decoder-only transformer from scratch and understand KV caching for efficient autoregressive generation.</p>
@@ -110,11 +133,11 @@
 <p>Learn diffusion and flow matching by generating images on MNIST. The references below trace the evolution from the original diffusion formulation to modern rectified flow matching.</p>
 
 <ul>
-  <li><a href="https://arxiv.org/abs/2006.11239">Denoising Diffusion Probabilistic Models</a> -- the original DDPM paper</li>
-  <li><a href="https://arxiv.org/abs/2010.02502">Denoising Diffusion Implicit Models (DDIM)</a> -- deterministic sampling; for a while everyone used this</li>
-  <li><a href="https://arxiv.org/abs/2112.10752">Latent Diffusion Models</a> -- computational trick: run diffusion in a learned latent space to make everything much faster</li>
-  <li><a href="https://arxiv.org/abs/2212.09748">Scalable Diffusion Models with Transformers (mmDiT)</a> -- the transformer architecture and conditioning mechanism that everyone is using now</li>
-  <li><a href="https://arxiv.org/abs/2403.03206">Scaling Rectified Flow Transformers for High-Resolution Image Synthesis</a> -- nowadays everyone is doing rectified flow matching</li>
+  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2006.11239">Denoising Diffusion Probabilistic Models</a> -- the original DDPM paper</li>
+  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2010.02502">Denoising Diffusion Implicit Models (DDIM)</a> -- deterministic sampling; for a while everyone used this</li>
+  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2112.10752">Latent Diffusion Models</a> -- computational trick: run diffusion in a learned latent space to make everything much faster</li>
+  <li><span class="tag tag-read">read</span> <a href="https://arxiv.org/abs/2212.09748">Scalable Diffusion Models with Transformers (mmDiT)</a> -- the transformer architecture and conditioning mechanism that everyone is using now</li>
+  <li><span class="tag tag-read">read</span> <a href="https://arxiv.org/abs/2403.03206">Scaling Rectified Flow Transformers for High-Resolution Image Synthesis</a> -- nowadays everyone is doing rectified flow matching</li>
   <li><a href="https://github.com/wendlerc/mnist">Rectified flow matching on MNIST</a> -- beautiful minimal implementation on MNIST</li>
   <li><a href="https://github.com/cloneofsimo/minRF">minRF: Rectified flow matching on CIFAR</a> -- minimal implementation on CIFAR</li>
 </ul>
@@ -124,10 +147,10 @@
 <p>Move from images to video: generate pong games using flow-matching-based video models.</p>
 
 <ul>
-  <li><a href="https://arxiv.org/abs/2503.20314">WAN: Scalable Bidirectional Text-to-Video Generation</a> -- bidirectional text-to-video generation</li>
-  <li><a href="https://arxiv.org/abs/2407.01392">Diffusion Forcing</a> -- bridges autoregressive and diffusion models for sequence generation</li>
-  <li><a href="https://arxiv.org/abs/2412.07772v1">CausVid</a> -- causal video generation (advanced)</li>
-  <li><a href="https://arxiv.org/abs/2506.08009">Self-Forcing</a> -- training autoregressive video models without teacher forcing (advanced)</li>
+  <li><span class="tag tag-skim">skim</span> <a href="https://arxiv.org/abs/2503.20314">WAN: Scalable Bidirectional Text-to-Video Generation</a> -- bidirectional text-to-video generation</li>
+  <li><span class="tag tag-skim">skim</span> <a href="https://arxiv.org/abs/2407.01392">Diffusion Forcing</a> -- bridges autoregressive and diffusion models for sequence generation</li>
+  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2412.07772v1">CausVid</a> -- causal video generation (advanced)</li>
+  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2506.08009">Self-Forcing</a> -- training autoregressive video models without teacher forcing (advanced)</li>
   <li><a href="https://github.com/wendlerc/toy-wm/">Minimal diffusion forcing implementation</a> -- a toy implementation to get started</li>
 </ul>
 

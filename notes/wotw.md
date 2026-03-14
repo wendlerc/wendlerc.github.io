@@ -2,6 +2,8 @@
 
 A reading list and collection of resources for building up to frame-autoregressive video generation and world models. The progression goes: autoregressive transformers, then flow matching for images, then flow matching for video, and finally combining both with KV caching for efficient frame-autoregressive generation.
 
+🟢 **read** — essential reading · 🟡 **skim** — worth skimming · 🟣 **bonus** — for deeper exploration
+
 ## 1. Decoder-only transformer + KV caching
 
 Build a decoder-only transformer from scratch and understand KV caching for efficient autoregressive generation.
@@ -13,11 +15,11 @@ Build a decoder-only transformer from scratch and understand KV caching for effi
 
 Learn diffusion and flow matching by generating images on MNIST. The references below trace the evolution from the original diffusion formulation to modern rectified flow matching.
 
-* [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) -- the original DDPM paper
-* [Denoising Diffusion Implicit Models (DDIM)](https://arxiv.org/abs/2010.02502) -- deterministic sampling; for a while everyone used this
-* [Latent Diffusion Models](https://arxiv.org/abs/2112.10752) -- computational trick: run diffusion in a learned latent space to make everything much faster
-* [Scalable Diffusion Models with Transformers (mmDiT)](https://arxiv.org/abs/2212.09748) -- the transformer architecture and conditioning mechanism that everyone is using now
-* [Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2403.03206) -- nowadays everyone is doing rectified flow matching
+* 🟣 bonus: [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) -- the original DDPM paper
+* 🟣 bonus: [Denoising Diffusion Implicit Models (DDIM)](https://arxiv.org/abs/2010.02502) -- deterministic sampling; for a while everyone used this
+* 🟣 bonus: [Latent Diffusion Models](https://arxiv.org/abs/2112.10752) -- computational trick: run diffusion in a learned latent space to make everything much faster
+* 🟢 read: [Scalable Diffusion Models with Transformers (mmDiT)](https://arxiv.org/abs/2212.09748) -- the transformer architecture and conditioning mechanism that everyone is using now
+* 🟢 read: [Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2403.03206) -- nowadays everyone is doing rectified flow matching
 * [Rectified flow matching on MNIST](https://github.com/wendlerc/mnist) -- beautiful minimal implementation on MNIST
 * [minRF: Rectified flow matching on CIFAR](https://github.com/cloneofsimo/minRF) -- minimal implementation on CIFAR
 
@@ -25,10 +27,10 @@ Learn diffusion and flow matching by generating images on MNIST. The references 
 
 Move from images to video: generate pong games using flow-matching-based video models.
 
-* [WAN: Scalable Bidirectional Text-to-Video Generation](https://arxiv.org/abs/2503.20314) -- bidirectional text-to-video generation
-* [Diffusion Forcing](https://arxiv.org/abs/2407.01392) -- bridges autoregressive and diffusion models for sequence generation
-* [CausVid](https://arxiv.org/abs/2412.07772v1) -- causal video generation (advanced)
-* [Self-Forcing](https://arxiv.org/abs/2506.08009) -- training autoregressive video models without teacher forcing (advanced)
+* 🟡 skim: [WAN: Scalable Bidirectional Text-to-Video Generation](https://arxiv.org/abs/2503.20314) -- bidirectional text-to-video generation
+* 🟡 skim: [Diffusion Forcing](https://arxiv.org/abs/2407.01392) -- bridges autoregressive and diffusion models for sequence generation
+* 🟣 bonus: [CausVid](https://arxiv.org/abs/2412.07772v1) -- causal video generation (advanced)
+* 🟣 bonus: [Self-Forcing](https://arxiv.org/abs/2506.08009) -- training autoregressive video models without teacher forcing (advanced)
 * [Minimal diffusion forcing implementation](https://github.com/wendlerc/toy-wm/) -- a toy implementation to get started
 
 ## 4. KV caching for frame-autoregressive transformers
