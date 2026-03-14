@@ -1,4 +1,4 @@
-# Getting into frame-autoregressive video and world models
+# Introduction to frame-autoregressive video models
 
 A reading list and collection of resources for building up to frame-autoregressive video generation and world models. The progression goes: autoregressive transformers, then flow matching for images, then flow matching for video, and finally combining both with KV caching for efficient frame-autoregressive generation.
 
