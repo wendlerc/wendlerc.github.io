@@ -2,14 +2,15 @@
 
 A reading list and collection of resources for building up to frame-autoregressive video generation and world models. The progression goes: autoregressive transformers, then flow matching for images, then flow matching for video, and finally combining both with KV caching for efficient frame-autoregressive generation.
 
-🟢 **read** — essential reading · 🟡 **skim** — worth skimming · 🟣 **bonus** — for deeper exploration
+🟢 **read** — essential reading · 🟡 **skim** — worth skimming · 🟣 **bonus** — for deeper exploration · 🔵 **code** — implementation
 
 ## 1. Decoder-only transformer + KV caching
 
 Build a decoder-only transformer from scratch and understand KV caching for efficient autoregressive generation.
 
 * [ARENA Chapter 1.1: Transformer from Scratch](https://arena-chapter1-transformer-interp.streamlit.app/[1.1]_Transformer_from_Scratch) -- step-by-step implementation of a transformer
-* [minGPT / nanoGPT](https://github.com/karpathy/minGPT) -- Karpathy's clean, minimal GPT implementations
+* 🔵 code: [minGPT / nanoGPT](https://github.com/karpathy/minGPT) -- Karpathy's clean, minimal GPT implementations
+* 🟢 read: [Coding the KV Cache in LLMs from Scratch](https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms) -- Sebastian Raschka's hands-on walkthrough of KV caching
 
 ## 2. MNIST & class-conditional MNIST using flow matching
 
@@ -20,8 +21,8 @@ Learn diffusion and flow matching by generating images on MNIST. The references 
 * 🟣 bonus: [Latent Diffusion Models](https://arxiv.org/abs/2112.10752) -- computational trick: run diffusion in a learned latent space to make everything much faster
 * 🟢 read: [Scalable Diffusion Models with Transformers (mmDiT)](https://arxiv.org/abs/2212.09748) -- the transformer architecture and conditioning mechanism that everyone is using now
 * 🟢 read: [Scaling Rectified Flow Transformers for High-Resolution Image Synthesis](https://arxiv.org/abs/2403.03206) -- nowadays everyone is doing rectified flow matching
-* [Rectified flow matching on MNIST](https://github.com/wendlerc/mnist) -- beautiful minimal implementation on MNIST
-* [minRF: Rectified flow matching on CIFAR](https://github.com/cloneofsimo/minRF) -- minimal implementation on CIFAR
+* 🔵 code: [Rectified flow matching on MNIST](https://github.com/wendlerc/mnist) -- beautiful minimal implementation on MNIST
+* 🔵 code: [minRF: Rectified flow matching on CIFAR](https://github.com/cloneofsimo/minRF) -- minimal implementation on CIFAR
 
 ## 3. Pong using flow matching
 
@@ -31,7 +32,7 @@ Move from images to video: generate pong games using flow-matching-based video m
 * 🟡 skim: [Diffusion Forcing](https://arxiv.org/abs/2407.01392) -- bridges autoregressive and diffusion models for sequence generation
 * 🟣 bonus: [CausVid](https://arxiv.org/abs/2412.07772v1) -- causal video generation (advanced)
 * 🟣 bonus: [Self-Forcing](https://arxiv.org/abs/2506.08009) -- training autoregressive video models without teacher forcing (advanced)
-* [Minimal diffusion forcing implementation](https://github.com/wendlerc/toy-wm/) -- a toy implementation to get started
+* 🔵 code: [Minimal diffusion forcing implementation](https://github.com/wendlerc/toy-wm/) -- a toy implementation to get started
 
 ## 4. KV caching for frame-autoregressive transformers
 
