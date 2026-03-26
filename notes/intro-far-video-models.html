@@ -131,6 +131,7 @@
   <li><span class="tag tag-code">tutorial</span> <a href="https://arena-chapter1-transformer-interp.streamlit.app/[1.1]_Transformer_from_Scratch">ARENA Chapter 1.1: Transformer from Scratch</a> -- step-by-step implementation of a transformer</li>
   <li><span class="tag tag-code">code</span> <a href="https://github.com/karpathy/minGPT">minGPT / nanoGPT</a> -- Karpathy's clean, minimal GPT implementations</li>
   <li><span class="tag tag-read">bonus</span> <a href="https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms">Coding the KV Cache in LLMs from Scratch</a> -- Sebastian Raschka's hands-on walkthrough of KV caching</li>
+  <li>&#x1F4D3; <strong><a href="ex1-kv-cache.html">Exercise notebook 1: KV-Cache for Decoder-Only Transformers</a></strong> -- hands-on exercises starting from a working transformer and adding KV caching</li>
 </ul>
 
 <h2 id="2-mnist--class-conditional-mnist-using-flow-matching">2. MNIST &amp; class-conditional MNIST using flow matching</h2>
@@ -145,6 +146,7 @@
   <li><span class="tag tag-read">read</span> <a href="https://arxiv.org/abs/2403.03206">Scaling Rectified Flow Transformers for High-Resolution Image Synthesis</a> -- nowadays everyone is doing rectified flow matching</li>
   <li><span class="tag tag-code">code</span> <a href="https://github.com/wendlerc/mnist">Rectified flow matching on MNIST</a> -- beautiful minimal implementation on MNIST</li>
   <li><span class="tag tag-code">code</span> <a href="https://github.com/cloneofsimo/minRF">minRF: Rectified flow matching on CIFAR</a> -- minimal implementation on CIFAR</li>
+  <li>&#x1F4D3; <strong><a href="ex2-flow-matching-mnist.html">Exercise notebook 2: Flow Matching on MNIST</a></strong> -- build a DiT from scratch: patchify, flow matching, training, sampling, and classifier-free guidance</li>
 </ul>
 
 <h2 id="3-pong-using-flow-matching">3. Pong using flow matching</h2>
@@ -157,11 +159,16 @@
   <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2412.07772v1">CausVid</a> -- causal video generation (advanced)</li>
   <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2506.08009">Self-Forcing</a> -- training autoregressive video models without teacher forcing (advanced)</li>
   <li><span class="tag tag-code">code</span> <a href="https://github.com/wendlerc/toy-wm/">Minimal diffusion forcing implementation</a> -- a toy implementation to get started</li>
+  <li>&#x1F4D3; <strong><a href="ex3-far-pong.html">Exercise notebook 3: Frame-Autoregressive Pong</a></strong> -- extend the MNIST model to video with causal attention, action conditioning, and diffusion forcing</li>
 </ul>
 
 <h2 id="4-kv-caching-for-frame-autoregressive-transformers">4. KV caching for frame-autoregressive transformers</h2>
 
 <p>Combine KV caching (from step 1) with flow-matching video generation (from step 3) for efficient frame-autoregressive world models.</p>
+
+<ul>
+  <li>&#x1F4D3; <strong><a href="ex4-far-kv-cache.html">Exercise notebook 4: KV Caching for FAR Inference</a></strong> -- add KV caching to the video model for efficient autoregressive generation</li>
+</ul>
 
 </body>
 </html>
