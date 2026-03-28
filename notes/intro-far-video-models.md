@@ -39,6 +39,6 @@ Extend the DiT to video: block-causal attention masks, per-frame conditioning vi
 Add KV caching to the video DiT for efficient autoregressive generation: VideoKVCache with finalize/denoise modes, CachedVideoAttention with RoPE recomputation, and sliding-window eviction.
 
 * 📓 **[Part 4: KV Caching for FAR Inference](https://github.com/wendlerc/pong-tutorial-public/blob/main/exercises/part4_far_kv_cache/exercises.ipynb)**
-* 🟢 read: [Coding the KV Cache in LLMs from Scratch](https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms) -- Sebastian Raschka's hands-on walkthrough of KV caching
+* 🟡 skim: [Coding the KV Cache in LLMs from Scratch](https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms) -- Sebastian Raschka's hands-on walkthrough of KV caching
 * 🔵 code: [minGPT / nanoGPT](https://github.com/karpathy/minGPT) -- Karpathy's clean, minimal GPT implementations
 * [ARENA Chapter 1.1: Transformer from Scratch](https://arena-chapter1-transformer-interp.streamlit.app/[1.1]_Transformer_from_Scratch) -- step-by-step implementation of a transformer
