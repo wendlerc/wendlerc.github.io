@@ -10,7 +10,11 @@
 - [Maximum update parametrization (Adam)](./mup.html)
 - [Rotary positional encoding](./rope.html)
 
-## Resources 
+## Tutorials
+
+- [Introduction to frame-autoregressive video models](./far.html)
+
+## Resources
 
 - [Recommended materials](./resources.html)
 - [My theses](./theses.html)
