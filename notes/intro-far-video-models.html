@@ -76,98 +76,61 @@
     ul, ol {
       padding-left: 2em;
     }
-    .tag {
-      display: inline-block;
-      font-size: 0.75em;
-      font-weight: 600;
-      padding: 0.1em 0.5em;
-      border-radius: 3px;
-      vertical-align: middle;
-      margin-right: 0.3em;
-    }
-    .tag-read {
-      background-color: #dcffe4;
-      color: #22863a;
-    }
-    .tag-skim {
-      background-color: #fff8c5;
-      color: #735c0f;
-    }
-    .tag-bonus {
-      background-color: #f1f0ff;
-      color: #6f42c1;
-    }
-    .tag-code {
-      background-color: #e8f0fe;
-      color: #0366d6;
-    }
-    /* Syntax highlighting styles */
-    .highlight .c, .highlight .cm, .highlight .c1, .highlight .cs { color: #6a737d; } /* Comment */
-    .highlight .k, .highlight .kc, .highlight .kd, .highlight .kn, .highlight .kp, .highlight .kr, .highlight .kt { color: #d73a49; } /* Keyword */
-    .highlight .s, .highlight .sb, .highlight .sc, .highlight .sd, .highlight .s2, .highlight .s1 { color: #032f62; } /* String */
-    .highlight .na, .highlight .bp { color: #005cc5; } /* Name.Attribute, Name.Builtin.Pseudo */
-    .highlight .nb, .highlight .nc, .highlight .nf { color: #6f42c1; } /* Name.Builtin, Name.Class, Name.Function */
-    .highlight .no, .highlight .nd, .highlight .ni, .highlight .ne, .highlight .nv { color: #e36209; } /* Name.Constant, Name.Decorator, etc */
-    .highlight .o, .highlight .ow { color: #d73a49; } /* Operator, Operator.Word */
-    .highlight .m, .highlight .mf, .highlight .mh, .highlight .mi, .highlight .mo { color: #005cc5; } /* Literal.Number */
   </style>
-  <!-- MathJax for rendering math equations -->
-  <script type="text/javascript" id="MathJax-script" async
-    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
-  </script>
 </head>
 <body>
-  <h1 id="introduction-to-frame-autoregressive-video-models">Introduction to frame-autoregressive video models</h1>
 
-<p>A reading list and collection of resources for building up to frame-autoregressive video generation and world models. The progression goes: autoregressive transformers, then flow matching for images, then flow matching for video, and finally combining both with KV caching for efficient frame-autoregressive generation.</p>
+<h1 id="far-video-models">Introduction to frame-autoregressive video models</h1>
 
-<p><span class="tag tag-read">read</span> essential reading &nbsp; <span class="tag tag-skim">skim</span> worth skimming &nbsp; <span class="tag tag-bonus">bonus</span> for deeper exploration &nbsp; <span class="tag tag-code">code</span> implementation</p>
+<p>A reading list and collection of resources for building up to frame-autoregressive video generation and world models. The progression goes: flow matching basics on 2D data, then flow matching for images with a DiT, then flow matching for video with causal attention, and finally KV caching for efficient frame-autoregressive generation.</p>
 
-<h2 id="1-decoder-only-transformer--kv-caching">1. Decoder-only transformer + KV caching</h2>
+<p>&#x1F7E2; <strong>read</strong> &mdash; essential reading &middot; &#x1F7E1; <strong>skim</strong> &mdash; worth skimming &middot; &#x1F7E3; <strong>bonus</strong> &mdash; for deeper exploration &middot; &#x1F535; <strong>code</strong> &mdash; implementation</p>
 
-<p>Build a decoder-only transformer from scratch and understand KV caching for efficient autoregressive generation.</p>
+<h2 id="flow-matching-basics">1. Rectified flow matching basics</h2>
+
+<p>Learn the fundamentals of flow matching on a simple 2D dataset (two moons): velocity prediction, training, Euler sampling, noise schedules (uniform, SD3), and classifier-free guidance.</p>
 
 <ul>
-  <li><span class="tag tag-code">tutorial</span> <a href="https://arena-chapter1-transformer-interp.streamlit.app/[1.1]_Transformer_from_Scratch">ARENA Chapter 1.1: Transformer from Scratch</a> -- step-by-step implementation of a transformer</li>
-  <li><span class="tag tag-code">code</span> <a href="https://github.com/karpathy/minGPT">minGPT / nanoGPT</a> -- Karpathy's clean, minimal GPT implementations</li>
-  <li><span class="tag tag-read">bonus</span> <a href="https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms">Coding the KV Cache in LLMs from Scratch</a> -- Sebastian Raschka's hands-on walkthrough of KV caching</li>
-  <li>&#x1F4D3; <strong><a href="ex1-kv-cache.html">Exercise notebook 1: KV-Cache for Decoder-Only Transformers</a></strong> -- hands-on exercises starting from a working transformer and adding KV caching</li>
+  <li>&#x1F4D3; <strong><a href="https://github.com/wendlerc/pong-tutorial-public/blob/main/exercises/part1_flow_matching_basics/exercises.ipynb">Part 1: Rectified Flow Matching Basics</a></strong></li>
+  <li>&#x1F7E2; read: <a href="https://arxiv.org/abs/2403.03206">Scaling Rectified Flow Transformers for High-Resolution Image Synthesis</a> &mdash; the SD3 paper that popularized rectified flow matching</li>
+  <li>&#x1F7E3; bonus: <a href="https://arxiv.org/abs/2006.11239">Denoising Diffusion Probabilistic Models</a> &mdash; the original DDPM paper</li>
+  <li>&#x1F7E3; bonus: <a href="https://arxiv.org/abs/2010.02502">Denoising Diffusion Implicit Models (DDIM)</a> &mdash; deterministic sampling</li>
+  <li>&#x1F7E3; bonus: <a href="https://arxiv.org/abs/2112.10752">Latent Diffusion Models</a> &mdash; run diffusion in a learned latent space</li>
 </ul>
 
-<h2 id="2-mnist--class-conditional-mnist-using-flow-matching">2. MNIST &amp; class-conditional MNIST using flow matching</h2>
+<h2 id="flow-matching-mnist">2. Flow matching on MNIST</h2>
 
-<p>Learn diffusion and flow matching by generating images on MNIST. The references below trace the evolution from the original diffusion formulation to modern rectified flow matching.</p>
+<p>Build a Diffusion Transformer (DiT) from scratch and train it on MNIST with flow matching, classifier-free guidance, and the Muon optimizer.</p>
 
 <ul>
-  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2006.11239">Denoising Diffusion Probabilistic Models</a> -- the original DDPM paper</li>
-  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2010.02502">Denoising Diffusion Implicit Models (DDIM)</a> -- deterministic sampling; for a while everyone used this</li>
-  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2112.10752">Latent Diffusion Models</a> -- computational trick: run diffusion in a learned latent space to make everything much faster</li>
-  <li><span class="tag tag-read">read</span> <a href="https://arxiv.org/abs/2212.09748">Scalable Diffusion Models with Transformers (mmDiT)</a> -- the transformer architecture and conditioning mechanism that everyone is using now</li>
-  <li><span class="tag tag-read">read</span> <a href="https://arxiv.org/abs/2403.03206">Scaling Rectified Flow Transformers for High-Resolution Image Synthesis</a> -- nowadays everyone is doing rectified flow matching</li>
-  <li><span class="tag tag-code">code</span> <a href="https://github.com/wendlerc/mnist">Rectified flow matching on MNIST</a> -- beautiful minimal implementation on MNIST</li>
-  <li><span class="tag tag-code">code</span> <a href="https://github.com/cloneofsimo/minRF">minRF: Rectified flow matching on CIFAR</a> -- minimal implementation on CIFAR</li>
-  <li>&#x1F4D3; <strong><a href="ex2-flow-matching-mnist.html">Exercise notebook 2: Flow Matching on MNIST</a></strong> -- build a DiT from scratch: patchify, flow matching, training, sampling, and classifier-free guidance</li>
+  <li>&#x1F4D3; <strong><a href="https://github.com/wendlerc/pong-tutorial-public/blob/main/exercises/part2_flow_matching_mnist/exercises.ipynb">Part 2: Flow Matching on MNIST</a></strong></li>
+  <li>&#x1F7E2; read: <a href="https://arxiv.org/abs/2212.09748">Scalable Diffusion Models with Transformers (DiT)</a> &mdash; the transformer architecture and conditioning mechanism used throughout this tutorial</li>
+  <li>&#x1F535; code: <a href="https://github.com/wendlerc/mnist">Rectified flow matching on MNIST</a> &mdash; minimal implementation on MNIST</li>
+  <li>&#x1F535; code: <a href="https://github.com/cloneofsimo/minRF">minRF: Rectified flow matching on CIFAR</a> &mdash; minimal implementation on CIFAR</li>
 </ul>
 
-<h2 id="3-pong-using-flow-matching">3. Pong using flow matching</h2>
+<h2 id="far-pong">3. Frame-autoregressive Pong</h2>
 
-<p>Move from images to video: generate pong games using flow-matching-based video models.</p>
+<p>Extend the DiT to video: block-causal attention masks, per-frame conditioning via modulate/gate, action conditioning, and diffusion forcing training.</p>
 
 <ul>
-  <li><span class="tag tag-skim">skim</span> <a href="https://arxiv.org/abs/2503.20314">WAN: Scalable Bidirectional Text-to-Video Generation</a> -- bidirectional text-to-video generation</li>
-  <li><span class="tag tag-skim">skim</span> <a href="https://arxiv.org/abs/2407.01392">Diffusion Forcing</a> -- bridges autoregressive and diffusion models for sequence generation</li>
-  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2412.07772v1">CausVid</a> -- causal video generation (advanced)</li>
-  <li><span class="tag tag-bonus">bonus</span> <a href="https://arxiv.org/abs/2506.08009">Self-Forcing</a> -- training autoregressive video models without teacher forcing (advanced)</li>
-  <li><span class="tag tag-code">code</span> <a href="https://github.com/wendlerc/toy-wm/">Minimal diffusion forcing implementation</a> -- a toy implementation to get started</li>
-  <li>&#x1F4D3; <strong><a href="ex3-far-pong.html">Exercise notebook 3: Frame-Autoregressive Pong</a></strong> -- extend the MNIST model to video with causal attention, action conditioning, and diffusion forcing</li>
+  <li>&#x1F4D3; <strong><a href="https://github.com/wendlerc/pong-tutorial-public/blob/main/exercises/part3_far_pong/exercises.ipynb">Part 3: Frame-Autoregressive Pong</a></strong></li>
+  <li>&#x1F7E1; skim: <a href="https://arxiv.org/abs/2407.01392">Diffusion Forcing</a> &mdash; bridges autoregressive and diffusion models for sequence generation</li>
+  <li>&#x1F7E1; skim: <a href="https://arxiv.org/abs/2503.20314">WAN: Scalable Bidirectional Text-to-Video Generation</a> &mdash; bidirectional text-to-video generation</li>
+  <li>&#x1F7E3; bonus: <a href="https://arxiv.org/abs/2412.07772v1">CausVid</a> &mdash; causal video generation (advanced)</li>
+  <li>&#x1F7E3; bonus: <a href="https://arxiv.org/abs/2506.08009">Self-Forcing</a> &mdash; training autoregressive video models without teacher forcing (advanced)</li>
+  <li>&#x1F535; code: <a href="https://github.com/wendlerc/toy-wm/">Minimal diffusion forcing implementation</a> &mdash; the reference implementation this tutorial follows</li>
 </ul>
 
-<h2 id="4-kv-caching-for-frame-autoregressive-transformers">4. KV caching for frame-autoregressive transformers</h2>
+<h2 id="kv-cache">4. KV caching for frame-autoregressive inference</h2>
 
-<p>Combine KV caching (from step 1) with flow-matching video generation (from step 3) for efficient frame-autoregressive world models.</p>
+<p>Add KV caching to the video DiT for efficient autoregressive generation: VideoKVCache with finalize/denoise modes, CachedVideoAttention with RoPE recomputation, and sliding-window eviction.</p>
 
 <ul>
-  <li>&#x1F4D3; <strong><a href="ex4-far-kv-cache.html">Exercise notebook 4: KV Caching for FAR Inference</a></strong> -- add KV caching to the video model for efficient autoregressive generation</li>
+  <li>&#x1F4D3; <strong><a href="https://github.com/wendlerc/pong-tutorial-public/blob/main/exercises/part4_far_kv_cache/exercises.ipynb">Part 4: KV Caching for FAR Inference</a></strong></li>
+  <li>&#x1F7E2; read: <a href="https://magazine.sebastianraschka.com/p/coding-the-kv-cache-in-llms">Coding the KV Cache in LLMs from Scratch</a> &mdash; Sebastian Raschka's hands-on walkthrough of KV caching</li>
+  <li>&#x1F535; code: <a href="https://github.com/karpathy/minGPT">minGPT / nanoGPT</a> &mdash; Karpathy's clean, minimal GPT implementations</li>
+  <li><a href="https://arena-chapter1-transformer-interp.streamlit.app/[1.1]_Transformer_from_Scratch">ARENA Chapter 1.1: Transformer from Scratch</a> &mdash; step-by-step implementation of a transformer</li>
 </ul>
 
 </body>

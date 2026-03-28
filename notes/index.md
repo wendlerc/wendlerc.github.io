@@ -12,7 +12,7 @@
 
 ## Tutorials
 
-- [Introduction to frame-autoregressive video models](./far.html)
+- [Introduction to frame-autoregressive video models](./intro-far-video-models.html)
 
 ## Resources
 
